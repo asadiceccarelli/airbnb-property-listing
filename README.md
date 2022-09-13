@@ -32,3 +32,5 @@ The file `tabular_data.py` contains the function `clean_data()` which will take 
 </p>
 
 > A Tableau dashboard showing initial insights into the data.
+
+The function `load_airbnb()` will return the tuple `(features, labels)` ready to train a model.

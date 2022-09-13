@@ -45,13 +45,40 @@ def clean_data(df):
         df (DataFrame): DataFrame to be cleaned.
     Returns:
         df (DataFrame): Cleaned DataFrame."""
-    df.columns = airbnb_data.columns.str.lower()
+    logging.info('Cleaning data...')
+    df.columns = df.columns.str.lower()
     remove_rows_with_missing_ratings(df)
     combine_description_strings(df)
     set_default_feature_values(df)
     return df
 
 
+def load_airbnb(df, labels):
+    """Splits the DataFrame into features and labels, ready
+        to train a model.
+    Args:
+        df (DataFrame): Complete DataFrame.
+        labels (list): Column names of labels
+    Returns:
+        (tuple): Tuple containing features and labels."""
+    logging.info('Splitting into features and labels...')
+    labels = df[labels]
+    features = df.drop(labels, axis=1)
+    return (features, labels)
+
+
+def create_numerical_dataset(df):
+    """Drops all non-numerical values from DataFrame.
+    Args:
+        df (DataFrame): Original DataFrame.
+    Returns:
+        (DataFrame): DataFrame only containing numerical values."""
+    logging.info('Creating numerical dataset...')
+    return df[[
+        'guests', 'beds', 'bathrooms', 'price_night', 'cleanliness_rate',
+        'accuracy_rate', 'communication_rate', 'location_rate', 'check-in_rate',
+        'value_rate', 'amenities_count', 'bedrooms']]
+
 if __name__ == '__main__':
-    airbnb_data = pd.read_csv('dataframes/AirBnbData.csv')
-    clean_data(airbnb_data).to_csv('dataframes/cleaned_dataset.csv')
+    airbnb_data = pd.read_csv('dataframes/cleaned_dataset.csv')
+    create_numerical_dataset(airbnb_data).to_csv('dataframes/numerical_data.csv')
