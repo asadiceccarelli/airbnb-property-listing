@@ -38,7 +38,7 @@ X_test, X_validation, y_test, y_validation = train_test_split(X_test, y_test, te
 
 
 def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validation_pred, y_test, y_test_pred):
-    """Calculates the RMSE and R2 score of a model.
+    """Calculates the RMSE and R2 score of a regression model.
     Args:
         y_train (array): Features for training.
         y_train_pred (array): Features predicted with training set.
@@ -67,7 +67,7 @@ def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validati
 
 
 def save_model(model, hyperparameters, metrics, folder):
-    """Tunes the hyperparameters of a regression model and saves the information.
+    """saves the information of a tuned regression model.
     Args:
         model (class): Saved as a .joblib file.
         hyperparameters (dict): Saved as a .json file.
@@ -92,6 +92,7 @@ def get_baseline_score(regression_model, sets, folder):
     Returns:
         metrics (dict): Training, validation and testing performance metrics.
     """
+    logging.info('Calculating baseline score...')
     model = regression_model().fit(sets[0], sets[1])
     y_train_pred = model.predict(sets[0])
     y_validation_pred = model.predict(sets[2])
@@ -119,9 +120,8 @@ def tune_regression_model_hyperparameters(regression_model, sets, hyperparameter
         best_params (dict): The hyperparameters of the most accurate model
         metrics (dict): Training, validation and testing performance metrics.
     """
-    model = regression_model(random_state=13)
-
     logging.info('Performing GridSearch with KFold...')
+    model = regression_model(random_state=13)
     kfold = KFold(n_splits=5, shuffle=True, random_state=13)
     clf = GridSearchCV(model, hyperparameters, cv=kfold)
 
@@ -146,11 +146,12 @@ def evaluate_all_models():
         and XGBRegressor before saving the best model as a .joblib file, and
         best hyperparameters and performance metrics as .json files.
     """
+    logging.info('Evaluating models...')
     tune_regression_model_hyperparameters(
         DecisionTreeRegressor,
         [X_train, y_train, X_validation, y_validation, X_test, y_test],
         dict(max_depth=list(range(1, 10))),
-        'project/models/regression_models/decision_tree')
+        'project/models/regression_models/decision_tree_regressor')
 
     tune_regression_model_hyperparameters(
         RandomForestRegressor,
@@ -160,7 +161,7 @@ def evaluate_all_models():
             max_depth=list(range(1, 10)),
             bootstrap=[True, False],
             max_samples = list(range(40, 50))),
-        'project/models/regression_models/random_forest'
+        'project/models/regression_models/random_forest_regressor'
     )
 
     tune_regression_model_hyperparameters(
@@ -172,13 +173,13 @@ def evaluate_all_models():
             min_child_weight=list(range(1, 5)),
             gamma=list(range(1, 3)),
             learning_rate=np.arange(0.1, 0.5, 0.1)),
-        'project/models/regression_models/xgboost'
+        'project/models/regression_models/xgboost_regressor'
     )
 
 
 def find_best_model():
     """Searches through the regression_models directory to find the model
-        with the smallest RMSE value for the validation (best model).
+        with the smallest RMSE value for the validation set (best model).
     Returns:
         best_model (class): Loads the model.joblib file.
         best_hyperparameters (dict): Loads the hyperparameters.json file.
@@ -199,13 +200,12 @@ def find_best_model():
             best_hyperparameters = json.load(file)
     with open(f'project/models/regression_models/{best_model_name}/metrics.json', 'rb') as file:
             best_metrics = json.load(file)
-    
     return best_model, best_hyperparameters, best_metrics
 
 
 def compare_rmse():
-    """Plots a bar chart to compare validation RMSE of models
-    trained.
+    """Plots a bar chart to compare validation RMSE of regression
+    models trained.
     """
     logging.info('Plotting graphs...')
     paths = glob.glob('project/models/regression_models/*/metrics.json')
@@ -219,14 +219,14 @@ def compare_rmse():
     fig = px.bar(
         x=rmse.values(),
         y=rmse.keys(),
-        labels={'x': 'Validation set RMSE', 'y': 'Regression model'},
-        title='Comparing the The Root Mean Squared Error (RMSE) of different models.',
+        labels={'x': 'Validation set RMSE', 'y': 'Regression model', 'color': 'RMSE'},
+        title='Comparing the Root Mean Squared Error (RMSE) of different models',
         color=rmse.values(),
         color_continuous_scale='solar_r'
         )
     fig.update_layout(template='plotly_dark', yaxis={'categoryorder': 'total descending'})
     fig.update_xaxes(range=[100, 140])
-    fig.write_image('README-images/regression-rmse.png', scale=10)
+    fig.write_image('README-images/regression-rmse.png', scale=20)
 
 
 if __name__ == '__main__':
