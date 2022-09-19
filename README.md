@@ -75,3 +75,28 @@ label_encoded_y = label_encoder.transform(y)
 </p>
 
 > A comparison of the accuracy score of each model calculated from the validation set.
+
+
+## Creating an Artificial Neural Network (ANN)
+
+The package PyTorch will be used to create a feedforward neural network using linear regression.
+
+### Creating the DataLoader
+
+The class `price_night_Dataset` is created as a subclass `torch.utils.data.Dataset` which covers the data in a tuple and enables the access the index of each sample, as well as the length of the datasets. This class also contains the assertion `len(X) == len(y)` to ensure that the features and targets are of equal length.
+
+```py
+dataset = price_night_Dataset(inputs, features)
+```
+
+> Creating the dataset from the `price_night_Dataset` class.
+
+In deep learning, batches of data are used (usually as much as can fit onto a GPU). Using `torch.utils.data.DataLoader` as an iterable, the dataset is batched so it is more easily consumed by the neural network. The bath size will initially be set to a value of 100 and to be shuffled before each iteration, but the effect of different sizes and not shuffling will be inspected later in the project. 
+
+```py
+dataloader = DataLoader(dataset=dataset, shuffle=True, batch_size=100
+```
+
+> Creating the dataloader from the dataset.
+
+
