@@ -2,14 +2,16 @@ import torch
 import pandas as pd
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import Dataset, DataLoader
+
 
 # Convert inputs and targets to tensors
 numerical_dataset = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
 inputs = torch.tensor(numerical_dataset.drop('price_night', axis=1).values).float()  # 890x11
 features = torch.tensor(numerical_dataset['price_night']).float()  # 890x1
 
-class price_night_Dataset(torch.utils.data.Dataset):
+
+class price_night_Dataset(Dataset):
     def __init__(self, X, y):
         assert len(X) == len(y), "Data and labels must be of equal length."
         self.X = X
@@ -28,23 +30,6 @@ dataset = price_night_Dataset(inputs, features)
 print(dataset)
 dataloader = DataLoader(dataset=dataset, shuffle=True, batch_size=100)
 
-
-# Define model
-model = nn.Linear(11, 1)
-
-# Define a utility function to train the model
-def fit(num_epochs, model, loss_fn, opt):
-    for epoch in range(num_epochs):
-        for xb,yb in train_dl:
-            # Generate predictions
-            pred = model(xb)
-            loss = loss_fn(pred, yb)
-            # Perform gradient descent
-            loss.backward()
-            opt.step()
-            opt.zero_grad()
-        print('Training loss: ', loss_fn(model(inputs), targets))
-
 class SimpleNet(nn.Module):
     # Initialize the layers
     def __init__(self):
@@ -61,8 +46,7 @@ class SimpleNet(nn.Module):
         return x
 
 
-model = SimpleNet()
+model = SimpleNet(1, 1)
+criterion = nn.MSELoss()
 opt = torch.optim.SGD(model.parameters(), 1e-5)
-loss_fn = F.mse_loss
-
-# fit(1000, model, loss_fn, opt)
+epochs = 1500

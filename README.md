@@ -99,4 +99,18 @@ dataloader = DataLoader(dataset=dataset, shuffle=True, batch_size=100
 
 > Creating the dataloader from the dataset.
 
+### Creating the network architecture
 
+The neural network is created as a class `SimpleNet` using Object Orientated Programming (OOP). The layers are defined in the init function and the forward pass is defined in the `forward` function, which is invoked automatically when the class is called. Using `super().__init__`, these functions are possible as the class `nn.Module` from torch is inherited. Two linear hidden layers (`linear1` and `linear2`) are used with a `ReLU` activation function (`act1`).
+
+N.B. `nn.Linear` takes a input shape and output shape and produces a weight and bias term for the specified shape.
+
+Parameters:
+1. `model = SimpleNet(1, 1)`
+    - An object of the `SimpleNet` class with specified input and output size.
+2. `criterion = nn.MSELoss()`
+    - As this is a regression problem, the Mean Squared Error (MSE) will be used as a loss function.
+3. `optimiser = torch.optim.SGD(model.parameters(), lr=1e-5)`
+    - `optim.SGD` is used instead of manually manipulating the weights and biases, and `lr` is the learning rate.
+4. `epochs = 1500`
+    - The number of iterations for training.
