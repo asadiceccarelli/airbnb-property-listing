@@ -5,48 +5,86 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 
-# Convert inputs and targets to tensors
+##############################
+# 1. LOAD THE DATASET
+##############################
+
 numerical_dataset = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
-inputs = torch.tensor(numerical_dataset.drop('price_night', axis=1).values).float()  # 890x11
-features = torch.tensor(numerical_dataset['price_night']).float()  # 890x1
+features = torch.tensor(numerical_dataset.drop('price_night', axis=1).values).float()  # 890x11
+targets = torch.tensor(numerical_dataset['price_night']).float()  # 890x1
 
+################################
+# 2. MAKE THE DATASET ITERABLE
+################################
 
-class price_night_Dataset(Dataset):
+class PriceNightDataset(Dataset):
     def __init__(self, X, y):
         assert len(X) == len(y), "Data and labels must be of equal length."
         self.X = X
         self.y = y
 
-    # Not dependent on index
     def __getitem__(self, index):
         return self.X[index], self.y[index]
 
     def __len__(self):
         return len(self.y)
 
+batch_size = 100
+n_iters = 3000
+num_epochs = n_iters / (len(features) / batch_size)
+num_epochs = int(num_epochs)
 
-# Define dataset
-dataset = price_night_Dataset(inputs, features)
-print(dataset)
-dataloader = DataLoader(dataset=dataset, shuffle=True, batch_size=100)
+dataset = PriceNightDataset(features, targets)
+dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
 
-class SimpleNet(nn.Module):
+################################
+# 3. CREATE MODEL CLASS
+################################
+
+class FeedforwardNeuralNetModel(nn.Module):
     # Initialize the layers
-    def __init__(self):
-        super().__init__()
-        self.linear1 = nn.Linear(11, 11)
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(FeedforwardNeuralNetModel, self).__init__()
+        self.linear1 = nn.Linear(input_dim, hidden_dim)
         self.act1 = nn.ReLU() # Activation function
-        self.linear2 = nn.Linear(11, 1)
+        self.linear2 = nn.Linear(hidden_dim, output_dim)
     
     # Perform the computation
     def forward(self, x):
-        x = self.linear1(x)
-        x = self.act1(x)
-        x = self.linear2(x)
-        return x
+        output = self.linear1(x) 
+        output = self.act1(output)
+        output = self.linear2(output)
+        return output
 
+################################
+# 4. INSTANTIATE MODEL CLASS
+################################
 
-model = SimpleNet(1, 1)
+input_dim = 11
+hidden_dim = 50
+output_dim = 1
+
+model = FeedforwardNeuralNetModel(input_dim, hidden_dim, output_dim)
+
+################################
+# 5. SET PARAMETERS
+################################
+
 criterion = nn.MSELoss()
-opt = torch.optim.SGD(model.parameters(), 1e-5)
-epochs = 1500
+
+learning_rate = 1e-6
+opt = torch.optim.SGD(model.parameters(), learning_rate)
+epochs = 7000
+
+################################
+# 5. TRAIN THE MODEL
+################################
+
+for i in range(epochs):
+    for x_train, y_train in dataloader:
+        opt.zero_grad()
+        pred = model(x_train)
+        loss = criterion(pred, y_train)
+        loss.backward()
+        opt.step()
+    print('Training loss: ', criterion(model(features), targets))
