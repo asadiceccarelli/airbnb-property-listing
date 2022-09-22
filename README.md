@@ -75,3 +75,73 @@ label_encoded_y = label_encoder.transform(y)
 </p>
 
 > A comparison of the accuracy score of each model calculated from the validation set.
+
+
+## Creating an Artificial Neural Network (ANN)
+
+The package PyTorch will be used to create a feedforward neural network using linear regression.
+
+### Creating the DataLoader
+
+The class `PriceNightDataset` is created as a subclass `torch.utils.data.Dataset` which covers the data in a tuple and enables the access the index of each sample, as well as the length of the datasets. This class also contains the assertion `len(X) == len(y)` to ensure that the features and targets are of equal length.
+
+```py
+dataset = price_night_Dataset(inputs, features)
+```
+
+> Creating the dataset from the `price_night_Dataset` class.
+
+In deep learning, batches of data are used (usually as much as can fit onto a GPU). Using `torch.utils.data.DataLoader` as an iterable, the dataset is batched so it is more easily consumed by the neural network. The bath size will initially be set to a value of 100 and to be shuffled before each iteration, but the effect of different sizes and not shuffling will be inspected later in the project. 
+
+```py
+dataloader = DataLoader(dataset=dataset, shuffle=True, batch_size=100
+```
+
+> Creating the dataloader from the dataset.
+
+### Creating the network architecture
+
+The neural network is created as a class `FeedforwardNeuralNetModel` using Object Orientated Programming (OOP). The layers are defined in the `init` function and the forward pass is defined in the `forward` function, which is invoked automatically when the class is called. Using `super(FeedforwardNeuralNetModel, self).__init__`, these functions are possible as the class `nn.Module` from torch is inherited. Two linear hidden layers (`linear1` and `linear2`) are used with a `ReLU` activation function (`act1`).
+
+N.B. `nn.Linear` takes a input shape and output shape and produces a weight and bias term for the specified shape.
+
+### Instantiating the model
+
+The input and output dimensions are determined by the number of features to targets, which in this case are 11 and 1 respectively. Determining the dimension of the hidden layer requires a little more thought. Too few layers and there is insufficient model capacity to predict competently. However a bigger model does not necessarily always equate to a better model. A bigger model will require more training samples to learn and converge to a good model (also called the curse of dimensionality), hence the optimal number will depend on the problem. A hidden layer of 10 will be used initially.
+
+```py
+model = FeedforwardNeuralNetModel(input_dim, hidden_dim, output_dim)
+```
+
+> Instantiating the model
+
+### Setting model parameters
+
+1. `criterion = nn.MSELoss()`
+    - As this is a regression problem, the Mean Squared Error (MSE) will be used as a loss function.
+2. `optimiser = torch.optim.SGD(model.parameters(), lr=learning_rate)`
+    - `optim.SGD` is used instead of manually manipulating the weights and biases, and the learning rate is set to 1e-5.
+3. `epochs = 1500`
+    - The number of iterations for training.
+
+### Training the model
+
+The model is trained by iterating through a `for` loop for each epoch:
+
+1. Set gradient w.r.t. parameters to zero with the `.zero_grad` method
+3. Predict an array of targets based on the features
+4. Calculate loss
+5. Calculate gradients w.r.t. parameters with the `.backward()` method
+6. Update parameters using gradients with the `.step()` method
+
+```py
+for i in range(epochs):
+  for x_train, y_train in dataloader:
+    opt.zero_grad()
+    pred = model(x_train)
+    loss = criterion(pred, y_train)
+    loss.backward()
+    opt.step()
+```
+
+> The training loop.
