@@ -77,9 +77,15 @@ label_encoded_y = label_encoder.transform(y)
 > A comparison of the accuracy score of each model calculated from the validation set.
 
 
-## Creating an Artificial Neural Network (ANN)
+## Creating an FeedForward Artificial Neural Network
 
-The package PyTorch will be used to create a feedforward neural network using linear regression.
+<p align='center'>
+  <img src='README-images/FNN.png' width='300'>
+</p>
+
+Feedforward neural networks are also known as Multi-layered Network of Neurons (MLN). These network of models are called feedforward because the information only travels forward in the neural network, through the input nodes then through the hidden layers and finally through the output nodes.
+
+The Pytorch NN module will be used to create this model.
 
 ### Creating the DataLoader
 
@@ -107,13 +113,18 @@ N.B. `nn.Linear` takes a input shape and output shape and produces a weight and 
 
 ### Instantiating the model
 
-The input and output dimensions are determined by the number of features to targets, which in this case are 11 and 1 respectively. Determining the dimension of the hidden layer requires a little more thought. Too few layers and there is insufficient model capacity to predict competently. However a bigger model does not necessarily always equate to a better model. A bigger model will require more training samples to learn and converge to a good model (also called the curse of dimensionality), hence the optimal number will depend on the problem. A hidden layer of 10 will be used initially.
+The input and output dimensions are determined by the number of features to targets, which in this case are 11 and 1 respectively. Determining the dimension of the hidden layer requires a little more thought. Too few hidden neurons and there is insufficient model capacity to predict competently. However a bigger model does not necessarily always equate to a better model. A bigger model will require more training samples to learn and converge to a good model (also called the curse of dimensionality), hence the optimal number will depend on the problem. There are many genereal 'rule-of thumb' methods such as:
+- The number of hidden neurons should be between the size of the input layer and the size of the output layer.
+- The number of hidden neurons should be 2/3 the size of the input layer, plus the size of the output layer.
+- The number of hidden neurons should be less than twice the size of the input layer.
+
+A single hidden layer containing 8 neurons will be used initially.
 
 ```py
 model = FeedforwardNeuralNetModel(input_dim, hidden_dim, output_dim)
 ```
 
-> Instantiating the model
+> Instantiating the model.
 
 ### Setting model parameters
 
@@ -145,3 +156,18 @@ for i in range(epochs):
 ```
 
 > The training loop.
+
+### Tuning the parameters
+
+<p align='center'>
+  <img src='README-images/error-line.png' width='500'>
+  <img src='README-images/hidden-dim-line.png' width='500'>
+</p>
+
+> The Mean Square Error as the learning rate and number of hidden neurons is varied.
+
+A smaller learning rate means the model takes a larger number of epoch to converge, however too small a learning rate will lead to unstable oscillations in the MSE. It seems for this model containing 8 neurons in the hidden layer, 1e-5 is the optimal learning rate.
+
+Varying the the dimension of the hidden layer has a less pronounced effect: a larger number of neurons will lead to a faster convergence, however has a far longer computation time. Too few neurons and the model will not converge. As the improvement on final MSE with more a large number of neurons for this probelem is so small, the original number of 8 neurons will be used for the model.
+
+After 300 epochs, this model gives a MSE of 16158.6240234375, or a RMSE of 127.116576509. This is already an improvement on the linear regression model.
