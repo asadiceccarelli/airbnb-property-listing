@@ -22,7 +22,7 @@ y = pd.read_csv('project/dataframes/cleaned_dataset.csv', index_col=0)['category
 label_encoder = LabelEncoder().fit(y)
 label_encoded_y = label_encoder.transform(y)
 X_train, X_test, y_train, y_test = train_test_split(X, label_encoded_y, test_size=0.2, random_state=13)
-X_test, X_validation, y_test, y_validation = train_test_split(X_test, y_test, test_size=0.3, random_state=13)
+X_train, X_validation, y_train, y_validation = train_test_split(X_train, y_train, test_size=0.25, random_state=13)
 
 
 def calculate_classification_metrics(y_train, y_train_pred, y_validation, y_validation_pred, y_test, y_test_pred):
@@ -122,7 +122,7 @@ def tune_classification_model_hyperparameters(classification_model, sets, hyperp
     """
     model = classification_model(random_state=13)
 
-    logging.info('Performing GridSearch with KFold...')
+    logging.info(f'Performing GridSearch with KFold for {model}...')
     kfold = KFold(n_splits=5, shuffle=True, random_state=13)
     clf = GridSearchCV(model, hyperparameters, cv=kfold)
 
@@ -148,18 +148,18 @@ def evaluate_all_models():
         best hyperparameters and performance metrics as .json files.
     """
     
-    tune_classification_model_hyperparameters(
-        DecisionTreeClassifier,
-        [X_train, y_train, X_validation, y_validation, X_test, y_test],
-        dict(max_depth=list(range(1, 10))),
-        'project/models/classification_models/decision_tree_classifier'
-        )
+    # tune_classification_model_hyperparameters(
+    #     DecisionTreeClassifier,
+    #     [X_train, y_train, X_validation, y_validation, X_test, y_test],
+    #     dict(max_depth=list(range(1, 10))),
+    #     'project/models/classification_models/decision_tree_classifier'
+    #     )
 
     tune_classification_model_hyperparameters(
         RandomForestClassifier,
         [X_train, y_train, X_validation, y_validation, X_test, y_test],
         dict(
-            n_estimators=list(range(120, 130)),
+            n_estimators=list(range(115, 125)),
             max_depth=list(range(3, 8)),
             bootstrap=[True, False],
             max_samples = list(range(25, 35))),
@@ -171,9 +171,9 @@ def evaluate_all_models():
         [X_train, y_train, X_validation, y_validation, X_test, y_test],
         dict(
             n_estimators=list(range(10, 20)),
-            max_depth=list(range(1, 5)),
-            min_child_weight=list(range(1, 3)),
-            gamma=list(range(1, 3)),
+            max_depth=list(range(1, 7)),
+            min_child_weight=list(range(1, 10)),
+            gamma=list(range(1, 4)),
             learning_rate=np.arange(0.5, 1.1, 0.1)),
         'project/models/classification_models/xgboost_classifier'
     )
