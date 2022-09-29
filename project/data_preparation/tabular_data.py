@@ -86,6 +86,21 @@ def create_numerical_dataset(df):
         'value_rate', 'amenities_count', 'bedrooms'
         ]]
 
+
+def load_airbnb(df, labels):
+    """Splits the DataFrame into features and labels, ready
+        to train a model.
+    Args:
+        df (DataFrame): Complete DataFrame.
+        labels (list): Column names of labels
+    Returns:
+        (tuple): Tuple containing features and labels.
+    """
+    labels_df = df[labels]
+    features_df = df.drop(labels, axis=1)
+    return (features_df, labels_df)
+
+
 if __name__ == '__main__':
     airbnb_data = pd.read_csv('dataframes/cleaned_dataset.csv')
     create_numerical_dataset(airbnb_data).to_csv('dataframes/numerical_data.csv')

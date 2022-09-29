@@ -1,3 +1,4 @@
+import sys
 import logging
 import math
 import joblib
@@ -7,34 +8,30 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import plotly.express as px
+from collections import defaultdict
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split, KFold, GridSearchCV
 from sklearn.metrics import mean_squared_error, r2_score
 
+sys.path.append('project/data_preparation')
+from tabular_data import load_airbnb
+
 logging.basicConfig(level=logging.INFO)
 
 
-def load_airbnb(df, labels):
-    """Splits the DataFrame into features and labels, ready
-        to train a model.
-    Args:
-        df (DataFrame): Complete DataFrame.
-        labels (list): Column names of labels
+def split_dataset(random_state):
+    """Splits up the dataset into training, validation and testing datasets
+    in the repective ratio of 60:20:20.
     Returns:
-        (tuple): Tuple containing features and labels.
+        (tuple): (X_train, y_train, X_validation, y_validation, X_test, y_test)
     """
-    logging.info('Splitting into features and labels...')
-    labels_df = df[labels]
-    features_df = df.drop(labels, axis=1)
-    return (features_df, labels_df)
-
-
-numerical_dataset = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
-data = load_airbnb(numerical_dataset, 'price_night')
-X_train, X_test, y_train, y_test = train_test_split(data[0], data[1], test_size=0.2, random_state=13)
-X_test, X_validation, y_test, y_validation = train_test_split(X_test, y_test, test_size=0.3, random_state=13)
+    numerical_dataset = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
+    data = load_airbnb(numerical_dataset, 'price_night')
+    X_train, X_test, y_train, y_test = train_test_split(data[0], data[1], test_size=0.2, random_state=random_state)
+    X_train, X_validation, y_train, y_validation = train_test_split(X_train, y_train, test_size=0.25, random_state=random_state)
+    return (X_train, y_train, X_validation, y_validation, X_test, y_test)
 
 
 def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validation_pred, y_test, y_test_pred):
@@ -66,170 +63,243 @@ def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validati
     return metrics
 
 
-def save_model(model, hyperparameters, metrics, folder):
-    """saves the information of a tuned regression model.
-    Args:
-        model (class): Saved as a .joblib file.
-        hyperparameters (dict): Saved as a .json file.
-        metrics (dict): Saved as a .json file.
-        folder (str): The directory path of where to save the data.
-    """
-    logging.info('Saving data...')
-    joblib.dump(model, f'{folder}/model.joblib')
-    with open(f'{folder}/hyperparameters.json', 'w') as outfile:
-        json.dump(hyperparameters, outfile)
-    with open(f'{folder}/metrics.json', 'w') as outfile:
-        json.dump(metrics, outfile)
-
-
-def get_baseline_score(regression_model, sets, folder):
+def get_baseline_score(datasets):
     """Tunes the hyperparameters of a regression model and saves the information.
     Args:
-        model (class): The regression model to be as a baseline.
-        sets (list): List in the form [X_train, y_train, X_validation,
-            y_validation, X_test, y_test].
-        folder (str): The directory path of where to save the data.
+        datasets (tuple): (X_train, y_train, X_validation, y_validation,
+        X_test, y_test).
     Returns:
-        metrics (dict): Training, validation and testing performance metrics.
+        (tuple): (model, best_params, metrics)
     """
     logging.info('Calculating baseline score...')
-    model = regression_model().fit(sets[0], sets[1])
-    y_train_pred = model.predict(sets[0])
-    y_validation_pred = model.predict(sets[2])
-    y_test_pred = model.predict(sets[4])
+    model = LinearRegression().fit(datasets[0], datasets[1])
+    y_train_pred = model.predict(datasets[0])
+    y_validation_pred = model.predict(datasets[2])
+    y_test_pred = model.predict(datasets[4])
 
     best_params = model.get_params()
     metrics = calculate_regression_metrics(
-        sets[1], y_train_pred,
-        sets[3], y_validation_pred,
-        sets[5], y_test_pred
+        datasets[1], y_train_pred,
+        datasets[3], y_validation_pred,
+        datasets[5], y_test_pred
     )
-    save_model(model, best_params, metrics, folder)
-    return metrics
+    joblib.dump(model, open('project/models/regression_models/linear_regression/model.joblib', "wb"))
+    return (model, best_params, metrics)
 
 
-def tune_regression_model_hyperparameters(regression_model, sets, hyperparameters, folder):
+def tune_regression_model_parameters(regression_model, sets, parameters, seed):
     """Tunes the hyperparameters of a regression model and saves the information.
     Args:
         regression_model (class): The regression model to be tuned.
-        sets (list): List in the form [X_train, y_train, X_validation,
-            y_validation, X_test, y_test].
-        hyperparameters (dict): Keys as a list of hyperparameters to be tested.
-        folder (str): The directory path of where to save the data.
+        sets (tuple): (X_train, y_train, X_validation, y_validation,
+            X_test, y_test).
+        parameters (dict): Keys as a list of hyperparameters to be tested.
+        seed (int): The random state of the regression model.
     Returns:
-        best_params (dict): The hyperparameters of the most accurate model
-        metrics (dict): Training, validation and testing performance metrics.
+        best_params (dict): The optimal hyperparameters for this model.
     """
-    logging.info('Performing GridSearch with KFold...')
-    model = regression_model(random_state=13)
-    kfold = KFold(n_splits=5, shuffle=True, random_state=13)
-    clf = GridSearchCV(model, hyperparameters, cv=kfold)
-
-    best_model = clf.fit(sets[0], sets[1])
-    y_train_pred = best_model.predict(sets[0])
-    y_validation_pred = best_model.predict(sets[2])
-    y_test_pred = best_model.predict(sets[4])
-
-    best_params = best_model.best_params_
-    metrics = calculate_regression_metrics(
-        sets[1], y_train_pred,
-        sets[3], y_validation_pred,
-        sets[5], y_test_pred
-    )
-
-    save_model(best_model, best_params, metrics, folder)
-    return best_params, metrics
+    logging.info(f'Performing GridSearch with KFold for {regression_model}...')
+    model = regression_model(random_state=seed)
+    kfold = KFold(n_splits=5, shuffle=True, random_state=seed)
+    grid_search = GridSearchCV(model, parameters, cv=kfold)
+    grid_search.fit(sets[0], sets[1])
+    best_params = grid_search.best_params_
+    return best_params
 
 
-def evaluate_all_models():
+def evaluate_all_models(datasets, seed):
     """Tunes the hyperparameters of DecisionTreeRegressor, RandomForestRegressor
         and XGBRegressor before saving the best model as a .joblib file, and
         best hyperparameters and performance metrics as .json files.
+    Args:
+        datasets (list): (X_train, y_train, X_validation, y_validation,
+            X_test, y_test).
+        seed (int): The random state of the regression model.
+    Returns:
+        regression_models (tuple): A tuple of the tuned regression models,
+            each one containing (best_model, best_params, metrics).
     """
     logging.info('Evaluating models...')
-    tune_regression_model_hyperparameters(
+    decision_tree = tune_regression_model_parameters(
         DecisionTreeRegressor,
-        [X_train, y_train, X_validation, y_validation, X_test, y_test],
-        dict(max_depth=list(range(1, 10))),
-        'project/models/regression_models/decision_tree_regressor')
+        datasets,
+        dict(max_depth=list(range(1, 5))),
+        seed = seed
+    )
 
-    tune_regression_model_hyperparameters(
+    random_forest = tune_regression_model_parameters(
         RandomForestRegressor,
-        [X_train, y_train, X_validation, y_validation, X_test, y_test],
+        datasets,
         dict(
-            n_estimators=list(range(80, 90)),
-            max_depth=list(range(1, 10)),
-            bootstrap=[True, False],
-            max_samples = list(range(40, 50))),
-        'project/models/regression_models/random_forest_regressor'
+            n_estimators=list(range(75, 100)),
+            max_depth=list(range(5, 17)),
+            max_samples = list(range(45, 55)),
+        ),
+        seed = seed
     )
 
-    tune_regression_model_hyperparameters(
+    xgboost = tune_regression_model_parameters(
         xgb.XGBRegressor,
-        [X_train, y_train, X_validation, y_validation, X_test, y_test],
+        datasets,
         dict(
-            n_estimators=list(range(10, 30)),
-            max_depth=list(range(1, 10)),
-            min_child_weight=list(range(1, 5)),
-            gamma=list(range(1, 3)),
-            learning_rate=np.arange(0.1, 0.5, 0.1)),
-        'project/models/regression_models/xgboost_regressor'
+            n_estimators=list(range(15, 33)),
+            max_depth=list(range(1, 7)),
+            min_child_weight=list(range(1, 15)),
+            learning_rate=np.arange(0.1, 1.1, 0.1),
+        ),
+        seed = seed
     )
 
+    regression_models = {
+        'decision_tree_regressor': decision_tree,
+        'random_forest_regressor': random_forest,
+        'xgboost_regressor': xgboost
+    }
+    return regression_models
 
-def find_best_model():
-    """Searches through the regression_models directory to find the model
-        with the smallest RMSE value for the validation set (best model).
-    Returns:
-        best_model (class): Loads the model.joblib file.
-        best_hyperparameters (dict): Loads the hyperparameters.json file.
-        best_metrics (dict): Loads the metrics.json file.
+
+def repeat_tuning(num_seeds):
+    """Tune and train each model multiple times, each time with a
+    different seed. Saves the metrics in a dictionary.
+    Args:
+        num_seeds (int): Number of different seeds to train the model.
     """
-    logging.info('Finding best model...')
-    paths = glob.glob('project/models/regression_models/*/metrics.json')
-    rmse = {}
-    for path in paths:
-        model = path[33:-13]
-        with open(path) as file:
-            metrics = json.load(file)
-        rmse[model] = metrics['Validation RMSE']
-
-    best_model_name = min(rmse, key=rmse.get)
-    best_model = joblib.load(f'project/models/regression_models/{best_model_name}/model.joblib')
-    with open(f'project/models/regression_models/{best_model_name}/hyperparameters.json', 'rb') as file:
-            best_hyperparameters = json.load(file)
-    with open(f'project/models/regression_models/{best_model_name}/metrics.json', 'rb') as file:
-            best_metrics = json.load(file)
-    return best_model, best_hyperparameters, best_metrics
+    seeds = list(range(num_seeds))
+    seeds = [6, 5, 3]
+    for seed in seeds:
+        logging.info(f'Using seed {seed}:')
+        datasets = split_dataset(seed)
+        regression_models = evaluate_all_models(datasets, seed)
+        for model in regression_models:
+            best_params = regression_models[model]
+            print(best_params)
+            with open(f'project/models/regression_models/{model}/seeds_tested/{seed}', 'w') as outfile:
+                json.dump(best_params, outfile)
 
 
-def compare_rmse():
-    """Plots a bar chart to compare validation RMSE of regression
-    models trained.
+def get_average_parameters():
+    """Searches through the seeds tested and averages out the optimum
+    hyperparameters which will be used to train the models. Saves as a
+    dictionary in hyperparameters.json.
     """
-    logging.info('Plotting graphs...')
-    paths = glob.glob('project/models/regression_models/*/metrics.json')
-    rmse = {}
-    for path in paths:
-        model = path[33:-13]
-        with open(path) as file:
-            metrics = json.load(file)
-        rmse[model] = metrics['Validation RMSE']
+    models = glob.glob('project/models/regression_models/*')
+    models = [i for i in models if i not in (
+        'project/models/regression_models/regression_modelling.py',
+        'project/models/regression_models/linear_regression',
+        'project/models/regression_models/regression_graphs.ipynb'
+        )]
 
-    fig = px.bar(
-        x=rmse.values(),
-        y=rmse.keys(),
-        labels={'x': 'Validation set RMSE', 'y': 'Regression model', 'color': 'RMSE'},
-        title='Comparing the Root Mean Squared Error (RMSE) of different models',
-        color=rmse.values(),
-        color_continuous_scale='solar_r'
-        )
-    fig.update_layout(template='plotly_dark', yaxis={'categoryorder': 'total descending'})
-    fig.update_xaxes(range=[100, 140])
-    fig.write_image('README-images/regression-rmse.png', scale=20)
+    paths = []
+    for model in models:
+        model_name = model.split('/')[-1]
+        paths = glob.glob(f'{model}/seeds_tested/*')
+        parameter_list = []
+        for path in paths:
+                with open(path) as file:
+                        parameter_list.append(json.load(file))
+        df = pd.DataFrame(parameter_list)
+        mean_parameters_dict = df.mean().to_dict()
+
+        path = f'project/models/regression_models/{model_name}/hyperparameters.json'
+        json.dump(mean_parameters_dict, (path, 'w'))
+
+
+def calculate_average_metrics():
+    '''Calculates the mean, variance and ranges of the validation set
+    in repeated_metrics.json file for each model. Saves as in metrics.json.
+    '''
+    repeated_metrics_path = glob.glob('project/models/regression_models/*/repeated_metrics.json')
+    for path in repeated_metrics_path:
+        model_name = path.split('/')[-2]
+        logging.info(f'Calcualating mean, variance and range for {model_name}...')
+        repeated_metrics = json.load(open(path, 'r'))
+        metrics_df = pd.DataFrame(repeated_metrics).transpose().describe()
+        validation_RMSE_mean = metrics_df.loc['mean'].loc['Validation RMSE']
+        validation_RMSE_variance = metrics_df.loc['std'].loc['Validation RMSE'] **2  # Variance = std**2
+        validation_RMSE_min = metrics_df.loc['min'].loc['Validation RMSE']
+        validation_RMSE_max = metrics_df.loc['max'].loc['Validation RMSE']
+        validation_metrics = {
+            'Validation RMSE mean': validation_RMSE_mean,
+            'Validation RMSE variance': validation_RMSE_variance,
+            'Validation RMSE min': validation_RMSE_min,
+            'Validation RMSE max': validation_RMSE_max
+            }
+        metrics_path = f'project/models/regression_models/{model_name}/metrics.json'
+        json.dump(validation_metrics, open(metrics_path, 'w'))
+
+
+def save_best_model(datasets):
+    """Saves the best models for each model as a .joblib file"""
+    decision_tree = DecisionTreeRegressor(
+        max_depth=1,
+        random_state=13
+    )
+    model = decision_tree.fit(datasets[0], datasets[1])
+    joblib.dump(model, open('project/models/regression_models/decision_tree_regressor/model.joblib', "wb"))
+    
+    random_forest = RandomForestRegressor(
+        n_estimators=88,
+        max_depth=12,
+        max_samples=48,
+        random_state=13
+    )
+    model = random_forest.fit(datasets[0], datasets[1])
+    joblib.dump(model, open('project/models/regression_models/random_forest_regressor/model.joblib', "wb"))
+
+    xgboost = xgb.XGBRegressor(
+        n_estimators=23,
+        max_depth=2,
+        min_child_weight=10,
+        learning_rate=0.37
+    )
+    model = xgboost.fit(datasets[0], datasets[1])
+    joblib.dump(model, open('project/models/regression_models/xgboost_regressor/model.joblib', "wb"))
+
+
+def train_model_multiple_times(no_trains):
+    """Trains a model a certain number of times and saves in a
+    metrics.json file.
+    """
+    model_paths = glob.glob('project/models/regression_models/*/model.joblib')
+    for path in model_paths:
+        model_name = path.split('/')[-2]
+        logging.info(f'Training {model_name} {no_trains} times...')
+        loaded_model = joblib.load(open(path, 'rb'))
+        metrics_dict = {}
+        for i in range(no_trains):
+            datasets = split_dataset(random_state=None)
+            model = loaded_model.fit(datasets[0], datasets[1])
+            y_train_pred = model.predict(datasets[0])
+            y_validation_pred = model.predict(datasets[2])
+            y_test_pred = model.predict(datasets[4])
+
+            metrics_dict[i] = calculate_regression_metrics(
+                datasets[1], y_train_pred,
+                datasets[3], y_validation_pred,
+                datasets[5], y_test_pred
+            )
+        repeated_metrics_path = f'project/models/regression_models/{model_name}/repeated_metrics.json'
+        json.dump(metrics_dict, open(repeated_metrics_path, 'w'))
+        
+
+def get_all_data(num_seeds, no_trains):
+    """Runs each function in the correct order as to calculate
+    all data required from the regression models.
+    Args:
+        num_seeds (int): The number of different seeds to try in
+            order to get the average best parameters.
+        no_trains (int): The number of times to train the each
+            best regression model.
+    """
+    datasets = split_dataset(random_state=13)
+    get_baseline_score(datasets)
+    repeat_tuning(num_seeds)
+    get_average_parameters()
+    save_best_model(datasets)  # Needs to be edited to ensure complete pipeline
+    train_model_multiple_times(no_trains)
 
 
 if __name__ == '__main__':
-    evaluate_all_models()
-    print(find_best_model())
-    compare_rmse()
+    get_all_data(num_seeds=10, no_trains=100)
+    
+    

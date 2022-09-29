@@ -39,8 +39,8 @@ The function `create_numerical_dataset()` will drop all columns containing non-n
 ## Creating a regression model
 
 The file `regression_modelling.py` will contain all the functions necessary to compare and select the best regression model used to predict the price per night of a listing. First, linear regression is used to calculate a baseline scores from the validation set:
-- Validation RMSE: 128.30976798890836
-- Validation R2 score: 0.3152634300318299
+- Validation RMSE: 128.31
+- Validation R2 score: 0.31526
 
 The function `tune_regression_model_hyperparameters()` will take a model, training, validation and testing sets, a dictionary of hyperparameter ranges to be tuned and a location of where to save calculated data as its parameters. Then, using `GridSearchCV` with a `KFolds` cross-validator, it will save the model, best parameters and performance metrics (RMSE and R2 score) to a folder in the `regression_models` directory. `evaluate_all_models()` will go through the models one by one and tune the respective hyperparameters, before `find_best_model()` will search through the `regression_models` directory and return the model with the lowest RMSE.
 
@@ -56,10 +56,10 @@ As can be seen from the chart below, the Random Forest Regressor has the lowest 
 ## Creating a classification model
 
 `classification_modelling.py` contains all the functions needed to create and tune classification models used to predict the category (treehouse, chalet, offbeat, beachfront or amazing pools). It is almost identical to the file `regression_modelling.py`, with the regression models replaced with their classification counterpart. For these models, the price per night will also be included as a feature. Using logistic regression gives the baseline metrics from the validation set as:
-- Validation accuracy score: 0.46296296296296297
-- Validation precision score: 0.5236257309941521
-- Validation recall score: 0.40310439560439554
-- Validation F1 score: 0.3842583070524247
+- Validation accuracy score: 0.46296
+- Validation precision score: 0.52363
+- Validation recall score: 0.40310
+- Validation F1 score: 0.38426
 
 Comparing the four models demonstrates that XGBoost provides the most accurate results. It should be noted that XGBoost requires the labels to be a numeric value, and therefore a label encoder is used to map the categories to the label space `[0, 1, 2, 3, 4]`.
 
@@ -170,4 +170,10 @@ A smaller learning rate means the model takes a larger number of epoch to conver
 
 Varying the the dimension of the hidden layer has a less pronounced effect: a larger number of neurons will lead to a faster convergence, however has a far longer computation time. Too few neurons and the model will not converge. As the improvement on final MSE with more a large number of neurons for this probelem is so small, the original number of 8 neurons will be used for the model.
 
-After 300 epochs, this model gives a MSE of 16158.6240234375, or a RMSE of 127.116576509. This is already an improvement on the linear regression model.
+After 300 epochs, this model gives a MSE of 16159.0, or a RMSE of 127.12. This is already an improvement on the linear regression model.
+
+<p align='center'>
+  <img src='README-images/tensorboard.png' width='500'>
+</p>
+
+> This data can also be represented on TensorBoard.
