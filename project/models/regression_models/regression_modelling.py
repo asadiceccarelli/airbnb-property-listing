@@ -7,8 +7,6 @@ import glob
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-import plotly.express as px
-from collections import defaultdict
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -57,7 +55,7 @@ def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validati
         'Training R2 score': r2_train,
         'Validation RMSE': rmse_validation,
         'Validation R2 score': r2_validation,
-        'Test RMSE:': rmse_test,
+        'Test RMSE': rmse_test,
         'Test R2 score': r2_test
         }
     return metrics
@@ -68,23 +66,19 @@ def get_baseline_score(datasets):
     Args:
         datasets (tuple): (X_train, y_train, X_validation, y_validation,
         X_test, y_test).
-    Returns:
-        (tuple): (model, best_params, metrics)
     """
     logging.info('Calculating baseline score...')
     model = LinearRegression().fit(datasets[0], datasets[1])
     y_train_pred = model.predict(datasets[0])
     y_validation_pred = model.predict(datasets[2])
     y_test_pred = model.predict(datasets[4])
-
-    best_params = model.get_params()
     metrics = calculate_regression_metrics(
         datasets[1], y_train_pred,
         datasets[3], y_validation_pred,
         datasets[5], y_test_pred
     )
-    joblib.dump(model, open('project/models/regression_models/linear_regression/model.joblib', "wb"))
-    return (model, best_params, metrics)
+    joblib.dump(model, open('project/models/regression_models/linear_regression/model.joblib', 'wb'))
+    json.dump(metrics, open('project/models/regression_models/linear_regression/baseline_metrics.json', 'w'))
 
 
 def tune_regression_model_parameters(regression_model, sets, parameters, seed):
@@ -204,30 +198,6 @@ def get_average_parameters():
         json.dump(mean_parameters_dict, (path, 'w'))
 
 
-def calculate_average_metrics():
-    '''Calculates the mean, variance and ranges of the validation set
-    in repeated_metrics.json file for each model. Saves as in metrics.json.
-    '''
-    repeated_metrics_path = glob.glob('project/models/regression_models/*/repeated_metrics.json')
-    for path in repeated_metrics_path:
-        model_name = path.split('/')[-2]
-        logging.info(f'Calcualating mean, variance and range for {model_name}...')
-        repeated_metrics = json.load(open(path, 'r'))
-        metrics_df = pd.DataFrame(repeated_metrics).transpose().describe()
-        validation_RMSE_mean = metrics_df.loc['mean'].loc['Validation RMSE']
-        validation_RMSE_variance = metrics_df.loc['std'].loc['Validation RMSE'] **2  # Variance = std**2
-        validation_RMSE_min = metrics_df.loc['min'].loc['Validation RMSE']
-        validation_RMSE_max = metrics_df.loc['max'].loc['Validation RMSE']
-        validation_metrics = {
-            'Validation RMSE mean': validation_RMSE_mean,
-            'Validation RMSE variance': validation_RMSE_variance,
-            'Validation RMSE min': validation_RMSE_min,
-            'Validation RMSE max': validation_RMSE_max
-            }
-        metrics_path = f'project/models/regression_models/{model_name}/metrics.json'
-        json.dump(validation_metrics, open(metrics_path, 'w'))
-
-
 def save_best_model(datasets):
     """Saves the best models for each model as a .joblib file"""
     decision_tree = DecisionTreeRegressor(
@@ -235,7 +205,7 @@ def save_best_model(datasets):
         random_state=13
     )
     model = decision_tree.fit(datasets[0], datasets[1])
-    joblib.dump(model, open('project/models/regression_models/decision_tree_regressor/model.joblib', "wb"))
+    joblib.dump(model, open('project/models/regression_models/decision_tree_regressor/model.joblib', 'wb'))
     
     random_forest = RandomForestRegressor(
         n_estimators=88,
@@ -244,7 +214,7 @@ def save_best_model(datasets):
         random_state=13
     )
     model = random_forest.fit(datasets[0], datasets[1])
-    joblib.dump(model, open('project/models/regression_models/random_forest_regressor/model.joblib', "wb"))
+    joblib.dump(model, open('project/models/regression_models/random_forest_regressor/model.joblib', 'wb'))
 
     xgboost = xgb.XGBRegressor(
         n_estimators=23,
@@ -253,7 +223,7 @@ def save_best_model(datasets):
         learning_rate=0.37
     )
     model = xgboost.fit(datasets[0], datasets[1])
-    joblib.dump(model, open('project/models/regression_models/xgboost_regressor/model.joblib', "wb"))
+    joblib.dump(model, open('project/models/regression_models/xgboost_regressor/model.joblib', 'wb'))
 
 
 def train_model_multiple_times(no_trains):
@@ -280,6 +250,21 @@ def train_model_multiple_times(no_trains):
             )
         repeated_metrics_path = f'project/models/regression_models/{model_name}/repeated_metrics.json'
         json.dump(metrics_dict, open(repeated_metrics_path, 'w'))
+
+
+def calculate_average_metrics():
+    '''Calculates the mean, variance and ranges of the validation set
+    in repeated_metrics.json file for each model. Saves as in metrics.json.
+    '''
+    repeated_metrics_path = glob.glob('project/models/regression_models/*/repeated_metrics.json')
+    for path in repeated_metrics_path:
+        model_name = path.split('/')[-2]
+        logging.info(f'Calcualating summary metrics for {model_name}...')
+        repeated_metrics = json.load(open(path, 'r'))
+        metrics_df = pd.DataFrame(repeated_metrics).transpose().describe()
+        metrics_dict = metrics_df.to_dict()
+        metrics_path = f'project/models/regression_models/{model_name}/summary_metrics.json'
+        json.dump(metrics_dict, open(metrics_path, 'w'))
         
 
 def get_all_data(num_seeds, no_trains):
@@ -297,9 +282,8 @@ def get_all_data(num_seeds, no_trains):
     get_average_parameters()
     save_best_model(datasets)  # Needs to be edited to ensure complete pipeline
     train_model_multiple_times(no_trains)
+    calculate_average_metrics()
 
 
 if __name__ == '__main__':
     get_all_data(num_seeds=10, no_trains=100)
-    
-    

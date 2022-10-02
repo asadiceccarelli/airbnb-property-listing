@@ -38,19 +38,36 @@ The function `create_numerical_dataset()` will drop all columns containing non-n
 
 ## Creating a regression model
 
-The file `regression_modelling.py` will contain all the functions necessary to compare and select the best regression model used to predict the price per night of a listing. First, linear regression is used to calculate a baseline scores from the validation set:
-- Validation RMSE: 128.31
-- Validation R2 score: 0.31526
+The file `regression_modelling.py` will contain all the functions necessary to compare and select the best regression model used to predict the price per night of a listing. First, a linear regression model is trained and the baseline metrics are calculated using `get_baseline_score()`:
+- Validation RMSE: 99.583
+- Validation R2 score: 0.42181
 
-The function `tune_regression_model_hyperparameters()` will take a model, training, validation and testing sets, a dictionary of hyperparameter ranges to be tuned and a location of where to save calculated data as its parameters. Then, using `GridSearchCV` with a `KFolds` cross-validator, it will save the model, best parameters and performance metrics (RMSE and R2 score) to a folder in the `regression_models` directory. `evaluate_all_models()` will go through the models one by one and tune the respective hyperparameters, before `find_best_model()` will search through the `regression_models` directory and return the model with the lowest RMSE.
+As there is an element of randomness in the splitting of the dataset and in the models, each model will be tuned multiple times with different random states. Then, an average taken in order to find the optimum hyperparameters that will give the most accurate results across the largest number of different seeds. The function `repeat_tuning()` will take the number of different seeds to tune over before using GridSearchCV with a KFolds cross-validator with 5 splits and saving the best hyperparameters for each model. Next, each model is trained a set number of times using the function `train_model_multiple_times()`. The RMSE and R2 score of each train is saved in a dictionary for each model and stored in `repeated_metrics.json`. Finally, a summary of these metrics is calculated easily by converting the data to a Pandas DataFrame and saving in `summary_metrics.json.` .
 
-As can be seen from the chart below, the Random Forest Regressor has the lowest RMSE value out of the four models tested.
+The box plot below demonstrates the importance of testing of a range of different seeds. The overlapping ranges shows that if just one seed is used, the rank of each model could in theory be in any order when using RMSE as a comarison.
 
 <p align='center'>
-  <img src='README-images/regression-rmse.png' width='500'>
+  <img src='README-images/regression-box-plot.png' width='500'>
+</p>
+
+> A box plot to show to show the range, median and interquartile range.
+
+Whilst it is evident that the using Decision Trees has the largest error, there is not a great deal to separate the other three regression models. In this case, Linear Regression is selected as the best model according to Occam's Razor, which states that we should prefer models with fewer coefficients over complex models like ensembles. This is because simpler machine learning models are expected to generalise better, and have less a tendancy to overfit.
+
+<p align='center'>
+  <img src='README-images/regression-mean-rmse.png' width='500'>
 </p>
 
 > A comparison of the RMSE of each model calculated from the validation set.
+
+Whilst maybe slightly overfit, the Linear Regression model is a good fit for our data as the error in both the training and testing sets are similar. The R2 score is interesting slightly higher in the testing set meaning there is less variance, but again this is only by a small amount.
+
+<p align='center'>
+  <img src='README-images/train-test-rmse.png' width='400'>
+  <img src='README-images/train-test-r2.png' width='400'>
+</p>
+
+> A comparison of the train and test sets' RMSE and R2 scores.
 
 
 ## Creating a classification model
