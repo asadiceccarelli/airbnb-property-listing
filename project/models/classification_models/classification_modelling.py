@@ -1,3 +1,4 @@
+from itertools import repeat
 import logging
 import math
 import joblib
@@ -17,12 +18,18 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 logging.basicConfig(level=logging.INFO)
 
 
-X = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
-y = pd.read_csv('project/dataframes/cleaned_dataset.csv', index_col=0)['category']
-label_encoder = LabelEncoder().fit(y)
-label_encoded_y = label_encoder.transform(y)
-X_train, X_test, y_train, y_test = train_test_split(X, label_encoded_y, test_size=0.2, random_state=13)
-X_train, X_validation, y_train, y_validation = train_test_split(X_train, y_train, test_size=0.25, random_state=13)
+def split_dataset(random_state):
+    """Splits up the dataset into training, validation and testing datasets
+    in the repective ratio of 60:20:20.
+    Returns:
+        (tuple): (X_train, y_train, X_validation, y_validation, X_test, y_test)
+    """
+    X = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
+    y = pd.read_csv('project/dataframes/cleaned_dataset.csv', index_col=0)['category']
+    label_encoded_y = LabelEncoder().fit_transform(y)
+    X_train, X_test, y_train, y_test = train_test_split(X, label_encoded_y, test_size=0.2, random_state=random_state)
+    X_train, X_validation, y_train, y_validation = train_test_split(X_train, y_train, test_size=0.25, random_state=random_state)
+    return (X_train, y_train, X_validation, y_validation, X_test, y_test)
 
 
 def calculate_classification_metrics(y_train, y_train_pred, y_validation, y_validation_pred, y_test, y_test_pred):
@@ -66,172 +73,222 @@ def calculate_classification_metrics(y_train, y_train_pred, y_validation, y_vali
     return metrics
 
 
-def save_model(model, hyperparameters, metrics, folder):
-    """saves the information of a tuned classification model.
-    Args:
-        model (class): Saved as a .joblib file.
-        hyperparameters (dict): Saved as a .json file.
-        metrics (dict): Saved as a .json file.
-        folder (str): The directory path of where to save the data.
-    """
-    logging.info('Saving data...')
-    joblib.dump(model, f'{folder}/model.joblib')
-    with open(f'{folder}/hyperparameters.json', 'w') as outfile:
-        json.dump(hyperparameters, outfile)
-    with open(f'{folder}/metrics.json', 'w') as outfile:
-        json.dump(metrics, outfile)
-
-
-def get_baseline_score(classification_model, sets, folder):
+def get_baseline_score(datasets):
     """Tunes the hyperparameters of a classification model and saves the information.
     Args:
-        model (class): The classification model to be as a baseline.
-        sets (list): List in the form [X_train, y_train, X_validation,
-            y_validation, X_test, y_test].
-        folder (str): The directory path of where to save the data.
+        datasets (tuple): (X_train, y_train, X_validation, y_validation,
+            X_test, y_test).
     Returns:
-        metrics (dict): Training, validation and testing performance metrics.
     """
     logging.info('Calculating baseline score...')
-    model = classification_model(multi_class='multinomial', solver='newton-cg', random_state=13).fit(sets[0], sets[1])
-    y_train_pred = model.predict(sets[0])
-    y_validation_pred = model.predict(sets[2])
-    y_test_pred = model.predict(sets[4])
+    model = LogisticRegression(multi_class='multinomial', solver='newton-cg').fit(datasets[0], datasets[1])
+    y_train_pred = model.predict(datasets[0])
+    y_validation_pred = model.predict(datasets[2])
+    y_test_pred = model.predict(datasets[4])
 
-    best_params = model.get_params()
     metrics = calculate_classification_metrics(
-        sets[1], y_train_pred,
-        sets[3], y_validation_pred,
-        sets[5], y_test_pred
+        datasets[1], y_train_pred,
+        datasets[3], y_validation_pred,
+        datasets[5], y_test_pred
     )
-    save_model(model, best_params, metrics, folder)
-    return metrics
+    joblib.dump(model, open('project/models/classification_models/logistic_regression/model.joblib', 'wb'))
+    json.dump(metrics, open('project/models/classification_models/logistic_regression/baseline_metrics.json', 'w'))
 
 
-def tune_classification_model_hyperparameters(classification_model, sets, hyperparameters, folder):
+def tune_classification_model_hyperparameters(classification_model, datasets, parameters, seed):
     """Tunes the hyperparameters of a classification model and saves the information.
     Args:
         classification_model (class): The classification model to be tuned.
-        sets (list): List in the form [X_train, y_train, X_validation,
-            y_validation, X_test, y_test].
-        hyperparameters (dict): Keys as a list of hyperparameters to be tested.
-        folder (str): The directory path of where to save the data.
+        datasets (tuple): (X_train, y_train, X_validation, y_validation,
+            X_test, y_test).
+        parameters (dict): Keys as hyperparameters to be tested.
+        seed (int): The random state of the classification model.
     Returns:
-        best_params (dict): The hyperparameters of the most accurate model
-        metrics (dict): Training, validation and testing performance metrics.
+        best_params (dict): The optimal hyperparameters for this model.
     """
-    model = classification_model(random_state=13)
-
-    logging.info(f'Performing GridSearch with KFold for {model}...')
-    kfold = KFold(n_splits=5, shuffle=True, random_state=13)
-    clf = GridSearchCV(model, hyperparameters, cv=kfold)
-
-    best_model = clf.fit(sets[0], sets[1])
-    y_train_pred = best_model.predict(sets[0])
-    y_validation_pred = best_model.predict(sets[2])
-    y_test_pred = best_model.predict(sets[4])
-
-    best_params = best_model.best_params_
-    metrics = calculate_classification_metrics(
-        sets[1], y_train_pred,
-        sets[3], y_validation_pred,
-        sets[5], y_test_pred
-    )
-
-    save_model(best_model, best_params, metrics, folder)
-    return best_params, metrics
+    logging.info(f'Performing GridSearch with KFold for {classification_model}...')
+    kfold = KFold(n_splits=5, shuffle=True, random_state=seed)
+    model = classification_model(random_state=seed)
+    grid_search = GridSearchCV(model, parameters, cv=kfold)
+    grid_search.fit(datasets[0], datasets[1])
+    best_params = grid_search.best_params_
+    return best_params
 
 
-def evaluate_all_models():
-    """Tunes the hyperparameters of DecisionTreeClassifier, RandomForestClassifier
-        and XGBClassifier before saving the best model as a .joblib file, and
-        best hyperparameters and performance metrics as .json files.
-    """
-    
-    # tune_classification_model_hyperparameters(
-    #     DecisionTreeClassifier,
-    #     [X_train, y_train, X_validation, y_validation, X_test, y_test],
-    #     dict(max_depth=list(range(1, 10))),
-    #     'project/models/classification_models/decision_tree_classifier'
-    #     )
-
-    tune_classification_model_hyperparameters(
-        RandomForestClassifier,
-        [X_train, y_train, X_validation, y_validation, X_test, y_test],
-        dict(
-            n_estimators=list(range(115, 125)),
-            max_depth=list(range(3, 8)),
-            bootstrap=[True, False],
-            max_samples = list(range(25, 35))),
-        'project/models/classification_models/random_forest_classifier'
-    )
-
-    tune_classification_model_hyperparameters(
-        xgb.XGBClassifier,
-        [X_train, y_train, X_validation, y_validation, X_test, y_test],
-        dict(
-            n_estimators=list(range(10, 20)),
-            max_depth=list(range(1, 7)),
-            min_child_weight=list(range(1, 10)),
-            gamma=list(range(1, 4)),
-            learning_rate=np.arange(0.5, 1.1, 0.1)),
-        'project/models/classification_models/xgboost_classifier'
-    )
-
-
-def find_best_model():
-    """Searches through the classification_models directory to find the model
-        with the highest accuracy value for the validation set (best model).
+def evaluate_all_models(datasets, seed):
+    """Tunes the hyperparameters of a classification model and saves the
+    information.
+    Args:
+        classification_model (class): The classification model to be tuned.
+        datasets (tuple): (X_train, y_train, X_validation, y_validation,
+            X_test, y_test).
+        parameters (dict): Keys as hyperparameters to be tested.
+        seed (int): The random state of the classification model.
     Returns:
-        best_model (class): Loads the model.joblib file.
-        best_hyperparameters (dict): Loads the hyperparameters.json file.
-        best_metrics (dict): Loads the metrics.json file.
+        best_params (dict): The optimal hyperparameters for this model.
     """
-    logging.info('Finding best model...')
-    paths = glob.glob('project/models/classification_models/*/metrics.json')
-    accuracy = {}
-    for path in paths:
-        model = path[37:-13]
-        with open(path) as file:
-            metrics = json.load(file)
-        accuracy[model] = metrics['Validation accuracy score']
-
-    best_model_name = min(accuracy, key=accuracy.get)
-    best_model = joblib.load(f'project/models/classification_models/{best_model_name}/model.joblib')
-    with open(f'project/models/classification_models/{best_model_name}/hyperparameters.json', 'rb') as file:
-            best_hyperparameters = json.load(file)
-    with open(f'project/models/classification_models/{best_model_name}/metrics.json', 'rb') as file:
-            best_metrics = json.load(file)
-    return best_model, best_hyperparameters, best_metrics
-
-
-def compare_accuracy():
-    """Plots a bar chart to compare validation accuracy of classification
-    models trained.
-    """
-    logging.info('Plotting graphs...')
-    paths = glob.glob('project/models/classification_models/*/metrics.json')
-    accuracy = {}
-    for path in paths:
-        model = path[37:-13]
-        with open(path) as file:
-            metrics = json.load(file)
-        accuracy[model] = metrics['Validation accuracy score']
-
-    fig = px.bar(
-        x=accuracy.values(),
-        y=accuracy.keys(),
-        labels={'x': 'Validation set accuracy score', 'y': 'Classification model', 'color': 'Accuracy'},
-        title='Comparing the accuracy score of different models',
-        color=accuracy.values(),
-        color_continuous_scale='solar'
+    logging.info('Evaluating models...')
+    decision_tree = tune_classification_model_hyperparameters(
+        DecisionTreeClassifier,
+        datasets,
+        dict(max_depth=list(range(1, 10))),
+        seed=seed
         )
-    fig.update_layout(template='plotly_dark', yaxis={'categoryorder': 'total descending'})
-    fig.update_xaxes(range=[0.2, 0.5])
-    fig.write_image('README-images/classification-accuracy.png', scale=20)
+    random_forest = tune_classification_model_hyperparameters(
+        RandomForestClassifier,
+        datasets,
+        dict(
+            n_estimators=list(range(120, 135)),
+            max_depth=list(range(4, 20)),
+            max_samples = list(range(40, 70))),
+        seed=seed
+    )
+    xgboost = tune_classification_model_hyperparameters(
+        xgb.XGBClassifier,
+        datasets,
+        dict(
+            n_estimators=list(range(8, 22)),
+            max_depth=list(range(1, 9)),
+            min_child_weight=list(range(1, 11)),
+            learning_rate=np.arange(0.5, 1.3, 0.1)),
+        seed=seed
+    )
+    classification_models = {
+        'decision_tree_classifier': decision_tree,
+        'random_forest_classifier': random_forest,
+        'xgboost_classifier': xgboost
+    }
+    return classification_models
+
+
+def repeat_tuning(num_seeds):
+    """Tune and train each model multiple times, each time with a
+    different seed. Saves the metrics in a dictionary.
+    Args:
+        num_seeds (int): Number of different seeds to train the model.
+    """
+    seeds = list(range(num_seeds))
+    for seed in seeds:
+        logging.info(f'Using seed {seed}:')
+        datasets = split_dataset(random_state=seed)
+        classification_models = evaluate_all_models(datasets, seed)
+        for model in classification_models:
+            best_params = classification_models[model]
+            print(best_params)
+            with open(f'project/models/classification_models/{model}/seeds_tested/{seed}', 'w') as outfile:
+                json.dump(best_params, outfile)
+
+
+def get_average_parameters():
+    """Searches through the seeds tested and averages out the optimum
+    hyperparameters which will be used to train the models. Saves as a
+    dictionary in hyperparameters.json.
+    """
+    models = glob.glob('project/models/classification_models/*')
+    models = [i for i in models if i not in (
+        'project/models/classification_models/classification_modelling.py',
+        'project/models/classification_models/logistic_regression',
+        'project/models/classification_models/classification_graphs.ipynb'
+        )]  # Only list directories containing models
+    paths = []
+    for model in models:
+        model_name = model.split('/')[-1]
+        paths = glob.glob(f'{model}/seeds_tested/*')
+        parameter_list = []
+        for path in paths:
+            parameter_list.append(json.load(open(path, 'r')))
+        df = pd.DataFrame(parameter_list)
+        mean_parameters_dict = df.mean().to_dict()
+        with open(f'project/models/classification_models/{model_name}/hyperparameters.json', 'w') as outfile:
+            json.dump(mean_parameters_dict, outfile)
+
+
+def save_best_model(datasets):
+    """Saves the best models for each model as a .joblib file"""
+    decision_tree = DecisionTreeClassifier(
+        max_depth=6,
+        random_state=13
+    )
+    model = decision_tree.fit(datasets[0], datasets[1])
+    joblib.dump(model, open('project/models/classification_models/decision_tree_classifier/model.joblib', 'wb'))
+    
+    random_forest = RandomForestClassifier(
+        n_estimators=123,
+        max_depth=8,
+        max_samples=54,
+        random_state=13
+    )
+    model = random_forest.fit(datasets[0], datasets[1])
+    joblib.dump(model, open('project/models/classification_models/random_forest_classifier/model.joblib', 'wb'))
+
+    xgboost = xgb.XGBClassifier(
+        n_estimators=14,
+        max_depth=3,
+        min_child_weight=7,
+        learning_rate=0.83
+    )
+    model = xgboost.fit(datasets[0], datasets[1])
+    joblib.dump(model, open('project/models/classification_models/xgboost_classifier/model.joblib', 'wb'))
+
+
+def train_model_multiple_times(no_trains):
+    """Trains a model a certain number of times and saves in a
+    metrics.json file.
+    """
+    model_paths = glob.glob('project/models/classification_models/*/model.joblib')
+    for path in model_paths:
+        model_name = path.split('/')[-2]
+        logging.info(f'Training {model_name} {no_trains} times...')
+        loaded_model = joblib.load(open(path, 'rb'))
+        metrics_dict = {}
+        for i in range(no_trains):
+            datasets = split_dataset(random_state=None)
+            model = loaded_model.fit(datasets[0], datasets[1])
+            y_train_pred = model.predict(datasets[0])
+            y_validation_pred = model.predict(datasets[2])
+            y_test_pred = model.predict(datasets[4])
+
+            metrics_dict[i] = calculate_classification_metrics(
+                datasets[1], y_train_pred,
+                datasets[3], y_validation_pred,
+                datasets[5], y_test_pred
+            )
+        with open(f'project/models/classification_models/{model_name}/repeated_metrics.json', 'w') as outfile:
+            json.dump(metrics_dict, outfile)
+
+
+def calculate_average_metrics():
+    '''Calculates the mean, variance and ranges of the validation set
+    in repeated_metrics.json file for each model. Saves as in metrics.json.
+    '''
+    repeated_metrics_path = glob.glob('project/models/classification_models/*/repeated_metrics.json')
+    for path in repeated_metrics_path:
+        model_name = path.split('/')[-2]
+        logging.info(f'Calcualating summary metrics for {model_name}...')
+        repeated_metrics = json.load(open(path, 'r'))
+        metrics_df = pd.DataFrame(repeated_metrics).transpose().describe()
+        metrics_dict = metrics_df.to_dict()
+        with open(f'project/models/classification_models/{model_name}/summary_metrics.json', 'w') as outfile:
+            json.dump(metrics_dict, outfile)
+
+
+def get_all_data(num_seeds, no_trains):
+    """Runs each function in the correct order as to calculate
+    all data required from the regression models.
+    Args:
+        num_seeds (int): The number of different seeds to try in
+            order to get the average best parameters.
+        no_trains (int): The number of times to train the each
+            best regression model.
+    """
+    datasets = split_dataset(random_state=13)
+    get_baseline_score(datasets)
+    repeat_tuning(num_seeds)
+    get_average_parameters()
+    save_best_model(datasets)  # Needs to be edited to ensure complete pipeline
+    train_model_multiple_times(no_trains)
+    calculate_average_metrics()
 
 
 if __name__ == '__main__':
-    evaluate_all_models()
-    print(find_best_model())
-    compare_accuracy()
+    get_all_data()
