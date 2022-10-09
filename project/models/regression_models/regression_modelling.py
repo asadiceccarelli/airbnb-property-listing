@@ -81,13 +81,13 @@ def get_baseline_score(datasets):
     json.dump(metrics, open('project/models/regression_models/linear_regression/baseline_metrics.json', 'w'))
 
 
-def tune_regression_model_parameters(regression_model, sets, parameters, seed):
+def tune_regression_model_parameters(regression_model, datasets, parameters, seed):
     """Tunes the hyperparameters of a regression model and saves the information.
     Args:
         regression_model (class): The regression model to be tuned.
-        sets (tuple): (X_train, y_train, X_validation, y_validation,
+        datasets (tuple): (X_train, y_train, X_validation, y_validation,
             X_test, y_test).
-        parameters (dict): Keys as a list of hyperparameters to be tested.
+        parameters (dict): Keys as hyperparameters to be tested.
         seed (int): The random state of the regression model.
     Returns:
         best_params (dict): The optimal hyperparameters for this model.
@@ -96,7 +96,7 @@ def tune_regression_model_parameters(regression_model, sets, parameters, seed):
     model = regression_model(random_state=seed)
     kfold = KFold(n_splits=5, shuffle=True, random_state=seed)
     grid_search = GridSearchCV(model, parameters, cv=kfold)
-    grid_search.fit(sets[0], sets[1])
+    grid_search.fit(datasets[0], datasets[1])
     best_params = grid_search.best_params_
     return best_params
 
@@ -118,9 +118,8 @@ def evaluate_all_models(datasets, seed):
         DecisionTreeRegressor,
         datasets,
         dict(max_depth=list(range(1, 5))),
-        seed = seed
+        seed=seed
     )
-
     random_forest = tune_regression_model_parameters(
         RandomForestRegressor,
         datasets,
@@ -129,9 +128,8 @@ def evaluate_all_models(datasets, seed):
             max_depth=list(range(5, 17)),
             max_samples = list(range(45, 55)),
         ),
-        seed = seed
+        seed=seed
     )
-
     xgboost = tune_regression_model_parameters(
         xgb.XGBRegressor,
         datasets,
@@ -141,9 +139,8 @@ def evaluate_all_models(datasets, seed):
             min_child_weight=list(range(1, 15)),
             learning_rate=np.arange(0.1, 1.1, 0.1),
         ),
-        seed = seed
+        seed=seed
     )
-
     regression_models = {
         'decision_tree_regressor': decision_tree,
         'random_forest_regressor': random_forest,
@@ -159,14 +156,12 @@ def repeat_tuning(num_seeds):
         num_seeds (int): Number of different seeds to train the model.
     """
     seeds = list(range(num_seeds))
-    seeds = [6, 5, 3]
     for seed in seeds:
         logging.info(f'Using seed {seed}:')
-        datasets = split_dataset(seed)
+        datasets = split_dataset(random_state=seed)
         regression_models = evaluate_all_models(datasets, seed)
         for model in regression_models:
             best_params = regression_models[model]
-            print(best_params)
             with open(f'project/models/regression_models/{model}/seeds_tested/{seed}', 'w') as outfile:
                 json.dump(best_params, outfile)
 
@@ -181,21 +176,18 @@ def get_average_parameters():
         'project/models/regression_models/regression_modelling.py',
         'project/models/regression_models/linear_regression',
         'project/models/regression_models/regression_graphs.ipynb'
-        )]
-
+        )]  # Only list directories containing models
     paths = []
     for model in models:
         model_name = model.split('/')[-1]
         paths = glob.glob(f'{model}/seeds_tested/*')
         parameter_list = []
         for path in paths:
-                with open(path) as file:
-                        parameter_list.append(json.load(file))
+            parameter_list.append(json.load(open(path, 'r')))
         df = pd.DataFrame(parameter_list)
         mean_parameters_dict = df.mean().to_dict()
-
-        path = f'project/models/regression_models/{model_name}/hyperparameters.json'
-        json.dump(mean_parameters_dict, (path, 'w'))
+        with open(f'project/models/regression_models/{model_name}/hyperparameters.json') as outfile:
+            json.dump(mean_parameters_dict, outfile)
 
 
 def save_best_model(datasets):
@@ -248,8 +240,8 @@ def train_model_multiple_times(no_trains):
                 datasets[3], y_validation_pred,
                 datasets[5], y_test_pred
             )
-        repeated_metrics_path = f'project/models/regression_models/{model_name}/repeated_metrics.json'
-        json.dump(metrics_dict, open(repeated_metrics_path, 'w'))
+        with open(f'project/models/regression_models/{model_name}/repeated_metrics.json') as outfile:
+            json.dump(metrics_dict, outfile)
 
 
 def calculate_average_metrics():
@@ -263,8 +255,8 @@ def calculate_average_metrics():
         repeated_metrics = json.load(open(path, 'r'))
         metrics_df = pd.DataFrame(repeated_metrics).transpose().describe()
         metrics_dict = metrics_df.to_dict()
-        metrics_path = f'project/models/regression_models/{model_name}/summary_metrics.json'
-        json.dump(metrics_dict, open(metrics_path, 'w'))
+        with open(f'project/models/regression_models/{model_name}/summary_metrics.json') as outfile:
+            json.dump(metrics_dict, outfile)
         
 
 def get_all_data(num_seeds, no_trains):
