@@ -50,7 +50,7 @@ The box plot below demonstrates the importance of testing of a range of differen
   <img src='README-images/regression-box-plot.png' width='500'>
 </p>
 
-> A box plot to show to show the range, median and interquartile range.
+> A box plot to show to show the range, median and interquartile range of regression models.
 
 Whilst it is evident that the using Decision Trees has the largest error, there is not a great deal to separate the other three regression models. In this case, Linear Regression is selected as the best model according to Occam's Razor, which states that we should prefer models with fewer coefficients over complex models like ensembles. This is because simpler machine learning models are expected to generalise better, and have less a tendancy to overfit.
 
@@ -72,13 +72,21 @@ Whilst maybe slightly overfit, the Linear Regression model is a good fit for our
 
 ## Creating a classification model
 
-`classification_modelling.py` contains all the functions needed to create and tune classification models used to predict the category (treehouse, chalet, offbeat, beachfront or amazing pools). It is almost identical to the file `regression_modelling.py`, with the regression models replaced with their classification counterpart. For these models, the price per night will also be included as a feature. Using logistic regression gives the baseline metrics from the validation set as:
+`classification_modelling.py` contains all the functions needed to create and tune classification models used to predict the category (treehouse, chalet, offbeat, beachfront or amazing pools). It is almost identical to the file `regression_modelling.py`, with the regression models replaced with their classification counterpart. For these models, the price per night will also be included as a feature. Using Logistic Regression gives the baseline metrics from the validation set as:
 - Validation accuracy score: 0.46296
 - Validation precision score: 0.52363
 - Validation recall score: 0.40310
 - Validation F1 score: 0.38426
 
-Comparing the four models demonstrates that XGBoost provides the most accurate results. It should be noted that XGBoost requires the labels to be a numeric value, and therefore a label encoder is used to map the categories to the label space `[0, 1, 2, 3, 4]`.
+Once again, each model is tuned with 10 different seeds so that the models can be more accurately compared.
+
+<p align='center'>
+  <img src='README-images/classification-box-plot.png' width='500'>
+</p>
+
+> A box plot to show to show the range, median and interquartile range of classification models.
+
+As XGBoost requires the labels to be a numeric value, and therefore a label encoder is used to map the categories to the label space `[0, 1, 2, 3, 4]`. As an alternative, one-hot encoding could be used to avoid the model understanding a ranking between the outputs.
 
 ```python
 label_encoder = LabelEncoder().fit(y)
@@ -88,10 +96,25 @@ label_encoded_y = label_encoder.transform(y)
 > Encoding the label space using `LabelEncoder`.
 
 <p align='center'>
-  <img src='README-images/classification-accuracy.png' width='500'>
+  <img src='README-images/classification-mean-accuracy-score.png' width='400'>
+  <img src='README-images/classification-mean-f1-score.png' width='400'>
 </p>
 
-> A comparison of the accuracy score of each model calculated from the validation set.
+> A comparison of the mean accuracy and F1 score of each model calculated from the validation set.
+
+Once again, the Decision Trees model is by far the worst model, with not much separating the other three in terms of accuracy. Whilst XGBoost does have a higher average F1 score, Logistic Regression will be taken as the best model according to Occam's Razor once more.
+
+<p align='center'>
+  <img src='README-images/train-test-accuracy.png' width='400'>
+  <img src='README-images/train-test-f1.png' width='400'>
+</p>
+
+> A comparison of the train and test sets' accuracy and F1 scores.
+
+As the training set performs better than the testing set, it seems that the model is overfitting. There are several options to combat this:
+- Alter the train-validation-test split
+- Reduce the number of features
+- Incoorporate regularisation (`C` hyperparameter in Logistic Regression)
 
 
 ## Creating an FeedForward Artificial Neural Network
