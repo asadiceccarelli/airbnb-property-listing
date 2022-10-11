@@ -1,15 +1,16 @@
 import logging
-from sklearn.metrics import mean_squared_error
+import os
 import torch
-import math
+import json
 import yaml
 import pandas as pd
 import torch.nn as nn
-import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 from torchmetrics.functional import mean_squared_error, r2_score
 from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+from time import time
 
 logging.basicConfig(level=logging.INFO)
 torch.manual_seed(13)
@@ -102,9 +103,10 @@ def get_nn_config(path):
     return config
 
 
-def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validation_pred, y_test, y_test_pred):
+def calculate_regression_metrics(training_time, inference_latency, y_train, y_train_pred, y_validation, y_validation_pred, y_test, y_test_pred):
     """Calculates the RMSE and R2 score of a regression model.
     Args:
+        training_time (float): Number of seconds to train model.
         y_train (array): Features for training.
         y_train_pred (array): Features predicted with training set.
         y_validation (array): Features for validation
@@ -121,6 +123,8 @@ def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validati
     rmse_test = mean_squared_error(y_test_pred, y_test, squared=True).item()
     r2_test = r2_score(y_test_pred, y_test).item()
     metrics = {
+        'Training time': training_time,
+        'Inference latency': inference_latency,
         'Training RMSE': rmse_train,
         'Training R2 score': r2_train,
         'Validation RMSE': rmse_validation,
@@ -142,6 +146,7 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
         num_epochs (int): The number of passes through the entire dataset.
     Returns:
         model (class): The trained model.
+        training_time (float): Number of seconds taken to train the model.
     """
     input_dim = X_train.shape[1]
     output_dim = y_train.shape[1]
@@ -149,10 +154,14 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
     criterion = nn.MSELoss()
     opt = config['optimiser'](model.parameters(), lr=config['learning_rate'])
 
+    start_time = time()
+    inference_latency_list = []
     for i in range(num_epochs):
         for X, y in dataloader:
             opt.zero_grad()
+            inference_latency_start = time()
             pred = model(X)
+            inference_latency_list.append(time() - inference_latency_start)
             loss = criterion(pred, y)
             loss.backward()
             opt.step()
@@ -160,21 +169,30 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
         # writer.add_scalar('RMSE/train', math.sqrt(criterion(model(features), targets).item()), i)
         if i % 50 == 0 or i == range(num_epochs)[-1]:
             logging.info(f'Epoch {i} MSE training loss: {criterion(model(X_train), y_train)}')
-    
-    return model
+
+    end_time = time()
+    training_time = end_time - start_time
+    inference_latency = sum(inference_latency_list) / len(inference_latency_list)
+    return model, training_time, inference_latency
 
 
-def save_model(model, sets):
+def save_model(model, sets, training_time, inference_latency):
     y_train_pred = model(sets[0])
     y_validation_pred = model(sets[2])
     y_test_pred = model(sets[4])
 
     metrics_dict = calculate_regression_metrics(
+        training_time,
+        inference_latency,
         sets[1], y_train_pred,
         sets[3], y_validation_pred,
         sets[5], y_test_pred
     )
-    print(metrics_dict)
+    date_time = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+    os.mkdir(f'project/models/neural_networks/regression/trains/{date_time}')
+    with open(f'project/models/neural_networks/regression/trains/{date_time}/metrics.json', 'w') as outfile:
+        json.dump(metrics_dict, outfile)
+    torch.save(model, f'project/models/neural_networks/regression/trains/{date_time}/model.pt')
 
 
 def create_and_train_nn():
@@ -187,8 +205,8 @@ def create_and_train_nn():
     num_epochs = get_num_epochs(2000, 100, sets[0])
     dataloader = create_dataloader(sets[0], sets[1], batch_size=100)
     config = get_nn_config('project/models/neural_networks/regression/nn_config.yaml')
-    model = train_model(sets[0], sets[1], dataloader, config, num_epochs)
-    save_model(model, sets)
+    model, training_time, inference_latency = train_model(sets[0], sets[1], dataloader, config, num_epochs)
+    save_model(model, sets, training_time, inference_latency)
     # writer.flush()
     # writer.close()
 
