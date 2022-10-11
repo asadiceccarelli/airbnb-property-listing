@@ -186,7 +186,7 @@ def get_average_parameters():
             parameter_list.append(json.load(open(path, 'r')))
         df = pd.DataFrame(parameter_list)
         mean_parameters_dict = df.mean().to_dict()
-        with open(f'project/models/regression_models/{model_name}/hyperparameters.json') as outfile:
+        with open(f'project/models/regression_models/{model_name}/hyperparameters.json', 'w') as outfile:
             json.dump(mean_parameters_dict, outfile)
 
 
@@ -278,4 +278,4 @@ def get_all_data(num_seeds, no_trains):
 
 
 if __name__ == '__main__':
-    get_all_data(num_seeds=10, no_trains=100)
+    get_all_data(num_seeds=10, no_trains=1000)
