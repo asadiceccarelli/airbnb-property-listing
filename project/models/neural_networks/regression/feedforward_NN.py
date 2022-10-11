@@ -1,14 +1,14 @@
 import logging
+from sklearn.metrics import mean_squared_error
 import torch
 import math
 import yaml
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
 import torch.nn as nn
 import torch.nn.functional as F
-import plotly.express as px
+from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
+from torchmetrics.functional import mean_squared_error, r2_score
 from torch.utils.tensorboard import SummaryWriter
 
 logging.basicConfig(level=logging.INFO)
@@ -114,12 +114,12 @@ def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validati
     Returns:
         metrics (dict): Training, validation and testing performance metrics.
     """
-    rmse_train = math.sqrt(mean_squared_error(y_train, y_train_pred))
-    r2_train = r2_score(y_train, y_train_pred)
-    rmse_validation = math.sqrt(mean_squared_error(y_validation, y_validation_pred))
-    r2_validation = r2_score(y_validation, y_validation_pred)
-    rmse_test = math.sqrt(mean_squared_error(y_test, y_test_pred))
-    r2_test = r2_score(y_test, y_test_pred)
+    rmse_train = mean_squared_error(y_train_pred, y_train, squared=True).item()
+    r2_train = r2_score(y_train_pred, y_train).item()
+    rmse_validation = mean_squared_error(y_validation_pred, y_validation, squared=True).item()
+    r2_validation = r2_score(y_validation_pred, y_validation).item()
+    rmse_test = mean_squared_error(y_test_pred, y_test, squared=True).item()
+    r2_test = r2_score(y_test_pred, y_test).item()
     metrics = {
         'Training RMSE': rmse_train,
         'Training R2 score': r2_train,
@@ -132,30 +132,49 @@ def calculate_regression_metrics(y_train, y_train_pred, y_validation, y_validati
 
 # writer = SummaryWriter('project/models/neural_networks/runs')
 
-def train_model(sets, dataloader, config, num_epochs):
+def train_model(X_train, y_train, dataloader, config, num_epochs):
     """Trains the feed forward neural network.
     Args:
+        X_train (tensor): The tensor containing the training features.
+        y_train (tensor): The tensor containing the training targets.
         dataloader (class): DataLoader created from the training set.
         config (dict): Network configuration settings.
         num_epochs (int): The number of passes through the entire dataset.
+    Returns:
+        model (class): The trained model.
     """
-    input_dim = sets[0].shape[1]
-    output_dim = sets[1].shape[1]
+    input_dim = X_train.shape[1]
+    output_dim = y_train.shape[1]
     model = FeedforwardNeuralNetModel(input_dim, config['hidden_dim_array'], output_dim)
     criterion = nn.MSELoss()
     opt = config['optimiser'](model.parameters(), lr=config['learning_rate'])
 
     for i in range(num_epochs):
-        for x_train, y_train in dataloader:
+        for X, y in dataloader:
             opt.zero_grad()
-            pred = model(x_train)
-            loss = criterion(pred, y_train)
+            pred = model(X)
+            loss = criterion(pred, y)
             loss.backward()
             opt.step()
             opt.zero_grad()
         # writer.add_scalar('RMSE/train', math.sqrt(criterion(model(features), targets).item()), i)
         if i % 50 == 0 or i == range(num_epochs)[-1]:
-            logging.info(f'Epoch {i} training loss: {criterion(model(sets[0]), sets[1])}')
+            logging.info(f'Epoch {i} MSE training loss: {criterion(model(X_train), y_train)}')
+    
+    return model
+
+
+def save_model(model, sets):
+    y_train_pred = model(sets[0])
+    y_validation_pred = model(sets[2])
+    y_test_pred = model(sets[4])
+
+    metrics_dict = calculate_regression_metrics(
+        sets[1], y_train_pred,
+        sets[3], y_validation_pred,
+        sets[5], y_test_pred
+    )
+    print(metrics_dict)
 
 
 def create_and_train_nn():
@@ -165,10 +184,11 @@ def create_and_train_nn():
     """
     numerical_dataset = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
     sets = split_dataset(numerical_dataset, ['price_night'], random_state=13)
-    # num_epochs = get_num_epochs(3000, 100, sets[0])
-    # dataloader = create_dataloader(sets[0], sets[1], batch_size=100)
-    # config = get_nn_config('project/models/neural_networks/regression/nn_config.yaml')
-    # train_model(sets, dataloader, config, num_epochs)
+    num_epochs = get_num_epochs(2000, 100, sets[0])
+    dataloader = create_dataloader(sets[0], sets[1], batch_size=100)
+    config = get_nn_config('project/models/neural_networks/regression/nn_config.yaml')
+    model = train_model(sets[0], sets[1], dataloader, config, num_epochs)
+    save_model(model, sets)
     # writer.flush()
     # writer.close()
 
