@@ -197,6 +197,20 @@ for i in range(epochs):
 
 > The training loop.
 
+Each time the model is trained, the RMSE, R2 score, training duration and average inference latency is saved in a `metrics.json` file along with the model in a directory named after the time and date, e.g. a model trained on the 1st of January at 08:00:00 would be saved in a folder called `models/neural_networks/regression/2018-01-01_08:00:00`
+
+The average inference latency is calculated using the memory efficient incremental average to avoid storing a list of all latency frequencies.
+
+```py
+inference_latency_start = time()
+pred = model(X)
+inference_latency = time() - inference_latency_start
+counter += 1
+mean_inference_latency += (inference_latency - mean_inference_latency) / counter
+```
+
+> Calculating mean inference latency using an incremental average.
+
 ### Tuning the parameters
 
 <p align='center'>
