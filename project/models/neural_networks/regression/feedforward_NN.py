@@ -1,5 +1,6 @@
 import logging
 import os
+import glob
 import torch
 import json
 import yaml
@@ -33,13 +34,13 @@ class FeedforwardNeuralNetModel(nn.Module):
     # Initialize the layers
     def __init__(self, input_dim, hidden_dim_array, output_dim):
         super(FeedforwardNeuralNetModel, self).__init__()
+        self.hidden_dim_array = hidden_dim_array
         self.layers = nn.ModuleList()
         for i in range(len(hidden_dim_array)):
             self.layers.append(nn.Linear(input_dim, hidden_dim_array[i]))
             input_dim = hidden_dim_array[i]  # For the next layer
             self.layers.append(nn.ReLU())  # Activation function
         self.layers.append(nn.Linear(input_dim, output_dim))
-        print(self.layers)
     
     # Perform the computation
     def forward(self, x):
@@ -116,11 +117,11 @@ def calculate_regression_metrics(training_time, inference_latency, y_train, y_tr
     Returns:
         metrics (dict): Training, validation and testing performance metrics.
     """
-    rmse_train = mean_squared_error(y_train_pred, y_train, squared=True).item()
+    rmse_train = mean_squared_error(y_train_pred, y_train, squared=False).item()
     r2_train = r2_score(y_train_pred, y_train).item()
-    rmse_validation = mean_squared_error(y_validation_pred, y_validation, squared=True).item()
+    rmse_validation = mean_squared_error(y_validation_pred, y_validation, squared=False).item()
     r2_validation = r2_score(y_validation_pred, y_validation).item()
-    rmse_test = mean_squared_error(y_test_pred, y_test, squared=True).item()
+    rmse_test = mean_squared_error(y_test_pred, y_test, squared=False).item()
     r2_test = r2_score(y_test_pred, y_test).item()
     metrics = {
         'Training time': training_time,
@@ -146,7 +147,11 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
         num_epochs (int): The number of passes through the entire dataset.
     Returns:
         model (class): The trained model.
+        opt (class): The optimiser used to update parameters based on
+            computed gradients.
         training_time (float): Number of seconds taken to train the model.
+        mean_inference_latency (float): The average number of seconds to
+            make a prediction.
     """
     input_dim = X_train.shape[1]
     output_dim = y_train.shape[1]
@@ -172,17 +177,31 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
         # writer.add_scalar('RMSE/train', math.sqrt(criterion(model(features), targets).item()), i)
         if i % 50 == 0 or i == range(num_epochs)[-1]:
             logging.info(f'Epoch {i} MSE training loss: {criterion(model(X_train), y_train)}')
-
     end_time = time()
     training_time = end_time - start_time
-    return model, training_time, mean_inference_latency
+    return model, opt, training_time, mean_inference_latency
 
 
-def save_model(model, sets, training_time, mean_inference_latency):
+def save_model(model, opt, sets, training_time, mean_inference_latency):
+    """Saves the model as a .pt file, the hyperparameters as a .yml file
+    and the metrics as a .json file.
+    Args:
+        model (class): The PyTorch model used.
+        opt (class): The optimiser used to update parameters based on
+            computed gradients.
+        sets (tuple): (X_train, y_train, X_validation, y_validation, X_test, y_test)
+        training_time (float): Number of seconds taken to train the model.
+        mean_inference_latency (float): The average number of seconds to
+            make a prediction.
+    """
     y_train_pred = model(sets[0])
     y_validation_pred = model(sets[2])
     y_test_pred = model(sets[4])
-
+    hyperparameters = {
+        'optimiser': torch.optim.SGD,
+        'learning_rate': opt.__dict__['defaults']['lr'],
+        'hidden_dim_array': model.hidden_dim_array
+        }
     metrics_dict = calculate_regression_metrics(
         training_time,
         mean_inference_latency,
@@ -192,25 +211,80 @@ def save_model(model, sets, training_time, mean_inference_latency):
     )
     date_time = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     os.mkdir(f'project/models/neural_networks/regression/trains/{date_time}')
+    torch.save(model, f'project/models/neural_networks/regression/trains/{date_time}/model.pt')
+    with open(f'project/models/neural_networks/regression/trains/{date_time}/hyperparameters.yml', 'w') as outfile:
+        yaml.dump(hyperparameters, outfile)
     with open(f'project/models/neural_networks/regression/trains/{date_time}/metrics.json', 'w') as outfile:
         json.dump(metrics_dict, outfile)
-    torch.save(model, f'project/models/neural_networks/regression/trains/{date_time}/model.pt')
 
 
-def create_and_train_nn():
+def create_and_train_nn(config):
     """Loads the dataset in the form of a Pandas DataFrame, converts
     to train, validation and testing tensors and then trains the
     feed forward model. Saves the hyperparameters, model and metrics.
+    Args:
+        config (dict): Containing information on the optimiser, learning
+            rate and hidden layer depth and width.
     """
     numerical_dataset = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
     sets = split_dataset(numerical_dataset, ['price_night'], random_state=13)
-    num_epochs = get_num_epochs(2000, 100, sets[0])
+    num_epochs = get_num_epochs(10000, 100, sets[0])
     dataloader = create_dataloader(sets[0], sets[1], batch_size=100)
-    config = get_nn_config('project/models/neural_networks/regression/nn_config.yaml')
-    model, training_time, mean_inference_latency = train_model(sets[0], sets[1], dataloader, config, num_epochs)
-    save_model(model, sets, training_time, mean_inference_latency)
+    model, opt, training_time, mean_inference_latency = train_model(sets[0], sets[1], dataloader, config, num_epochs)
+    save_model(model, opt, sets, training_time, mean_inference_latency)
     # writer.flush()
     # writer.close()
 
+
+def generate_nn_config():
+    """Creates multiple configuration dictionaries containing info on 
+    the optimiser, learning rate and depth and width of the hidden
+    layers.
+    Returns:
+        config_dict (dict): Containing multiple config dictionaries.
+    """
+    learning_rate_tests = [1e-4, 1e-5, 1e-6]
+    hidden_dim_array_tests = [
+        [2], [4], [6], [8], [10],
+        [2, 2], [4, 4], [6, 6], [8, 8], [10, 10],
+        [2, 2, 2], [4, 4, 4], [6, 6, 6], [8, 8, 8], [10, 10, 10],
+        [8, 4], [8, 6], [6, 4], [6, 2],
+        [8, 6, 4], [10, 6, 2], [6, 4, 2],
+        [10, 8, 6, 4],
+        [10, 8, 6, 4, 2],
+    ]
+    config_dict = {}
+    counter = 0
+    for learning_rate in learning_rate_tests:
+        for hidden_dim_array in hidden_dim_array_tests:
+            config_dict[counter] = {}
+            config_dict[counter]['optimiser'] = torch.optim.SGD
+            config_dict[counter]['learning_rate'] = learning_rate
+            config_dict[counter]['hidden_dim_array'] = hidden_dim_array
+            counter += 1
+    return config_dict
+
+
+def find_best_nn(config_dict):
+    """Creates and trains a new feed forward NN model for each
+    configuration and selects the best model based on validation
+    set RMSE. Outputs best model's hyperparameters to log.
+    Args:
+        config_dict (dict): Containing multiple config dictionaries.
+    """
+    for i in config_dict:
+        logging.info(f'Test {i}\nUsing parameters: {config_dict[i]}.')
+        create_and_train_nn(config_dict[i])
+    paths = glob.glob('project/models/neural_networks/regression/trains/*')
+    validation_rmse_dict = {}
+    for path in paths:
+        name = path.split('/')[-1]
+        with open(f'{path}/metrics.json', 'r') as file:
+            validation_rmse_dict[name] = json.load(file)['Validation RMSE']
+    best_model = min(validation_rmse_dict, key=validation_rmse_dict.get)
+    with open(f'project/models/neural_networks/regression/trains/{best_model}/hyperparameters.yml', 'r') as file:
+        best_params = yaml.load(file, Loader=yaml.Loader)
+    logging.info(f'Best model: {best_model}\nBest hyperparameters: {best_params}')
+
 if __name__ == '__main__':
-    create_and_train_nn()
+    find_best_nn(generate_nn_config())

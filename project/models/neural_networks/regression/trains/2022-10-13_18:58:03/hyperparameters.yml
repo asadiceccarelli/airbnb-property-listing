@@ -1,0 +1,5 @@
+hidden_dim_array:
+- 2
+- 2
+learning_rate: 1.0e-06
+optimiser: !!python/name:torch.optim.sgd.SGD ''
