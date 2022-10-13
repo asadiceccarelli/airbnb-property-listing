@@ -199,7 +199,7 @@ for i in range(epochs):
 
 Each time the model is trained, the RMSE, R2 score, training duration and average inference latency is saved in a `metrics.json` file along with the model in a directory named after the time and date, e.g. a model trained on the 1st of January at 08:00:00 would be saved in a folder called `models/neural_networks/regression/2018-01-01_08:00:00`
 
-The average inference latency is calculated using the memory efficient incremental average to avoid storing a list of all latency frequencies.
+The model is saved using `torch.save()` which saves the entire module using Python's `pickle` module. The average inference latency is calculated using the memory efficient incremental average to avoid storing a list of all latency frequencies.
 
 ```py
 inference_latency_start = time()
@@ -224,10 +224,4 @@ A smaller learning rate means the model takes a larger number of epoch to conver
 
 Varying the the dimension of the hidden layer has a less pronounced effect: a larger number of neurons will lead to a faster convergence, however has a far longer computation time. Too few neurons and the model will not converge. As the improvement on final MSE with more a large number of neurons for this probelem is so small, the original number of 8 neurons will be used for the model.
 
-After 300 epochs, this model gives a MSE of 16159.0, or a RMSE of 127.12. This is already an improvement on the linear regression model.
-
-<p align='center'>
-  <img src='README-images/tensorboard.png' width='500'>
-</p>
-
-> This data can also be represented on TensorBoard.
+The function `generate_nn_config()` creates a range of different configurations in the form of dictionaries, varying the learning rate and set up of the hidden layers. Then, `find_best_nn()` will iterate through these configurations, creating and training the feed forward neural network each time and save the model, hyperparameters and metrics. Finally it will check through each of these runs and output the hyperparameters of the model with the lowest validation set RMSE to the log. In this case, the best configuration for the hidden layers is in the form [6, 2] with a learning rate of 1e-5.
