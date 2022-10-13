@@ -1,4 +1,0 @@
-optimiser: !!python/name:torch.optim.SGD
-learning_rate: 1e-5
-hidden_width_layer: 8
-depth: 1
