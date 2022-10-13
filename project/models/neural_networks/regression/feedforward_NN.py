@@ -155,13 +155,16 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
     opt = config['optimiser'](model.parameters(), lr=config['learning_rate'])
 
     start_time = time()
-    inference_latency_list = []
+    mean_inference_latency = 0
+    counter = 0
     for i in range(num_epochs):
         for X, y in dataloader:
             opt.zero_grad()
             inference_latency_start = time()
             pred = model(X)
-            inference_latency_list.append(time() - inference_latency_start)
+            inference_latency = time() - inference_latency_start
+            counter += 1
+            mean_inference_latency += (inference_latency - mean_inference_latency) / counter  # Incremental mean
             loss = criterion(pred, y)
             loss.backward()
             opt.step()
@@ -172,18 +175,17 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
 
     end_time = time()
     training_time = end_time - start_time
-    inference_latency = sum(inference_latency_list) / len(inference_latency_list)
-    return model, training_time, inference_latency
+    return model, training_time, mean_inference_latency
 
 
-def save_model(model, sets, training_time, inference_latency):
+def save_model(model, sets, training_time, mean_inference_latency):
     y_train_pred = model(sets[0])
     y_validation_pred = model(sets[2])
     y_test_pred = model(sets[4])
 
     metrics_dict = calculate_regression_metrics(
         training_time,
-        inference_latency,
+        mean_inference_latency,
         sets[1], y_train_pred,
         sets[3], y_validation_pred,
         sets[5], y_test_pred
@@ -205,8 +207,8 @@ def create_and_train_nn():
     num_epochs = get_num_epochs(2000, 100, sets[0])
     dataloader = create_dataloader(sets[0], sets[1], batch_size=100)
     config = get_nn_config('project/models/neural_networks/regression/nn_config.yaml')
-    model, training_time, inference_latency = train_model(sets[0], sets[1], dataloader, config, num_epochs)
-    save_model(model, sets, training_time, inference_latency)
+    model, training_time, mean_inference_latency = train_model(sets[0], sets[1], dataloader, config, num_epochs)
+    save_model(model, sets, training_time, mean_inference_latency)
     # writer.flush()
     # writer.close()
 
