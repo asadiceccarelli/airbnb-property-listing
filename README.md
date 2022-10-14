@@ -224,4 +224,22 @@ A smaller learning rate means the model takes a larger number of epoch to conver
 
 Varying the the dimension of the hidden layer has a less pronounced effect: a larger number of neurons will lead to a faster convergence, however has a far longer computation time. Too few neurons and the model will not converge. As the improvement on final MSE with more a large number of neurons for this probelem is so small, the original number of 8 neurons will be used for the model.
 
-The function `generate_nn_config()` creates a range of different configurations in the form of dictionaries, varying the learning rate and set up of the hidden layers. Then, `find_best_nn()` will iterate through these configurations, creating and training the feed forward neural network each time and save the model, hyperparameters and metrics. Finally it will check through each of these runs and output the hyperparameters of the model with the lowest validation set RMSE to the log. In this case, the best configuration for the hidden layers is in the form [6, 2] with a learning rate of 1e-5.
+The function `generate_nn_config()` creates a range of different configurations in the form of dictionaries, varying the learning rate and set up of the hidden layers. Then, `find_best_nn()` will iterate through these configurations, creating and training the feed forward neural network each time and save the model, hyperparameters and metrics. Finally it will check through each of these runs and output the hyperparameters of the model with the lowest validation set RMSE to the log. 
+
+For this problem, the best hyperparameters are:
+- Optimiser: SGD
+- Learning rate: 1e-5
+- Hidden layer configuration: [6, 2]
+
+This model has the metrics:
+- Test set RMSE: 99.824
+- Test set R2 score: 0.37159
+- Training time: 10.491 seconds
+- Inference latency: 0.00010145 seconds
+
+<p align='center'>
+  <img src='README-images/nn-regression-train-test-rmse.png' width='500'>
+  <img src='README-images/nn-regression-train-test-R2.png' width='500'>
+</p>
+
+> The test and train set's RMSE and R2 score for the best performing model.
