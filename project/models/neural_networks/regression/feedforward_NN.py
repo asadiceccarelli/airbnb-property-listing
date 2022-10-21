@@ -1,10 +1,13 @@
 import logging
 import os
 import glob
+import math
 import torch
 import json
 import yaml
+import random
 import pandas as pd
+import numpy as np
 import torch.nn as nn
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
@@ -14,12 +17,21 @@ from datetime import datetime
 from time import time
 
 logging.basicConfig(level=logging.INFO)
+
 torch.manual_seed(13)
+seed = 13
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+np.random.seed(seed)
+random.seed(seed)
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
 
 
 class PriceNightDataset(Dataset):
     def __init__(self, X, y):
-        assert len(X) == len(y), "Data and labels must be of equal length."
+        assert len(X) == len(y), 'Data and labels must be of equal length.'
         self.X = X
         self.y = y
 
@@ -41,6 +53,13 @@ class FeedforwardNeuralNetModel(nn.Module):
             input_dim = hidden_dim_array[i]  # For the next layer
             self.layers.append(nn.ReLU())  # Activation function
         self.layers.append(nn.Linear(input_dim, output_dim))
+        self.weights_init()
+
+    def weights_init(self):
+        for layer in self.layers:
+            if isinstance(layer, nn.Linear):
+                nn.init.kaiming_uniform_(layer.weight, mode='fan_in', nonlinearity='relu')
+                nn.init.constant_(layer.bias, 1)
     
     # Perform the computation
     def forward(self, x):
@@ -94,16 +113,6 @@ def get_num_epochs(n_iters, batch_size, X_train):
     return int(n_iters / (len(X_train) / batch_size))
 
 
-def get_nn_config(path):
-    """Load config yaml file.
-    Args:
-        path (str): Path to config file.
-    """
-    with open(path) as file:
-        config = yaml.load(file, Loader=yaml.Loader)
-    return config
-
-
 def calculate_regression_metrics(training_time, inference_latency, y_train, y_train_pred, y_validation, y_validation_pred, y_test, y_test_pred):
     """Calculates the RMSE and R2 score of a regression model.
     Args:
@@ -135,7 +144,6 @@ def calculate_regression_metrics(training_time, inference_latency, y_train, y_tr
         }
     return metrics
 
-# writer = SummaryWriter('project/models/neural_networks/runs')
 
 def train_model(X_train, y_train, dataloader, config, num_epochs):
     """Trains the feed forward neural network.
@@ -158,6 +166,7 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
     model = FeedforwardNeuralNetModel(input_dim, config['hidden_dim_array'], output_dim)
     criterion = nn.MSELoss()
     opt = config['optimiser'](model.parameters(), lr=config['learning_rate'])
+    writer = SummaryWriter('project/models/neural_networks/regression/runs')
 
     start_time = time()
     mean_inference_latency = 0
@@ -173,10 +182,11 @@ def train_model(X_train, y_train, dataloader, config, num_epochs):
             loss = criterion(pred, y)
             loss.backward()
             opt.step()
-            opt.zero_grad()
-        # writer.add_scalar('RMSE/train', math.sqrt(criterion(model(features), targets).item()), i)
-        if i % 50 == 0 or i == range(num_epochs)[-1]:
+            writer.add_scalar('RMSE/train', math.sqrt(criterion(model(X_train), y_train).item()), i)
+        if i % 100 == 0 or i == range(num_epochs)[-1]:
             logging.info(f'Epoch {i} MSE training loss: {criterion(model(X_train), y_train)}')
+    writer.flush()
+    writer.close()
     end_time = time()
     training_time = end_time - start_time
     return model, opt, training_time, mean_inference_latency
@@ -226,14 +236,13 @@ def create_and_train_nn(config):
         config (dict): Containing information on the optimiser, learning
             rate and hidden layer depth and width.
     """
-    numerical_dataset = pd.read_csv('project/dataframes/numerical_data.csv', index_col=0)
+    torch.manual_seed(13)
+    numerical_dataset = pd.read_csv('project/data/structured/numerical_data.csv', index_col=0)
     sets = split_dataset(numerical_dataset, ['price_night'], random_state=13)
-    num_epochs = get_num_epochs(10000, 100, sets[0])
+    num_epochs = get_num_epochs(30000, 100, sets[0])
     dataloader = create_dataloader(sets[0], sets[1], batch_size=100)
     model, opt, training_time, mean_inference_latency = train_model(sets[0], sets[1], dataloader, config, num_epochs)
     save_model(model, opt, sets, training_time, mean_inference_latency)
-    # writer.flush()
-    # writer.close()
 
 
 def generate_nn_config():
@@ -248,8 +257,8 @@ def generate_nn_config():
         [2], [4], [6], [8], [10],
         [2, 2], [4, 4], [6, 6], [8, 8], [10, 10],
         [2, 2, 2], [4, 4, 4], [6, 6, 6], [8, 8, 8], [10, 10, 10],
-        [8, 4], [8, 6], [6, 4], [6, 2],
-        [8, 6, 4], [10, 6, 2], [6, 4, 2],
+        [8, 4], [8, 6], [8, 6], [6, 4], [6, 2], [4, 2],
+        [8, 6, 4], [10, 6, 4], [10, 6, 2], [8, 4, 2], [6, 4, 2],
         [10, 8, 6, 4],
         [10, 8, 6, 4, 2],
     ]
@@ -286,5 +295,13 @@ def find_best_nn(config_dict):
         best_params = yaml.load(file, Loader=yaml.Loader)
     logging.info(f'Best model: {best_model}\nBest hyperparameters: {best_params}')
 
+
+def train_model_once():
+    with open('project/models/neural_networks/regression/trains/2022-10-21_10:31:14/hyperparameters.yml', 'r') as file:
+        config = yaml.load(file, Loader=yaml.Loader)
+    create_and_train_nn(config)
+
+
 if __name__ == '__main__':
-    find_best_nn(generate_nn_config())
+    # find_best_nn(generate_nn_config())
+    train_model_once()
