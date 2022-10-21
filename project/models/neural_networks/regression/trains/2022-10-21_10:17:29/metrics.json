@@ -1,0 +1,1 @@
+{"Training time": 51.132832765579224, "Inference latency": 0.0001430089420949982, "Training RMSE": 147.65179443359375, "Training R2 score": -0.3719416856765747, "Validation RMSE": 153.8481903076172, "Validation R2 score": -0.3800160884857178, "Test RMSE": 147.375, "Test R2 score": -0.36968040466308594}

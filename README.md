@@ -132,28 +132,37 @@ The Pytorch NN module will be used to create this model.
 The class `PriceNightDataset` is created as a subclass `torch.utils.data.Dataset` which covers the data in a tuple and enables the access the index of each sample, as well as the length of the datasets. This class also contains the assertion `len(X) == len(y)` to ensure that the features and targets are of equal length.
 
 ```py
-dataset = price_night_Dataset(inputs, features)
+train_dataset = PriceNightDataset(X_train, y_train)
 ```
 
-> Creating the dataset from the `price_night_Dataset` class.
+> Creating the training dataset from the `price_night_Dataset` class.
 
-In deep learning, batches of data are used (usually as much as can fit onto a GPU). Using `torch.utils.data.DataLoader` as an iterable, the dataset is batched so it is more easily consumed by the neural network. The bath size will initially be set to a value of 100 and to be shuffled before each iteration, but the effect of different sizes and not shuffling will be inspected later in the project. 
+In deep learning, batches of data are used (usually as much as can fit onto a GPU). Using `torch.utils.data.DataLoader` as an iterable, the dataset is batched so it is more easily consumed by the neural network. The bath size will initially be set to a value of 100 and to be shuffled before each iteration, but the effect of different sizes and not shuffling can be inspected later in the project. 
 
 ```py
-dataloader = DataLoader(dataset=dataset, shuffle=True, batch_size=100
+dataloader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 ```
 
 > Creating the dataloader from the dataset.
 
 ### Creating the network architecture
 
-The neural network is created as a class `FeedforwardNeuralNetModel` using Object Orientated Programming (OOP). The layers are defined in the `init` function and the forward pass is defined in the `forward` function, which is invoked automatically when the class is called. Using `super(FeedforwardNeuralNetModel, self).__init__`, these functions are possible as the class `nn.Module` from torch is inherited. Two linear hidden layers (`linear1` and `linear2`) are used with a `ReLU` activation function (`act1`).
+The neural network is created as a class `FeedforwardNeuralNetModel` using Object Orientated Programming (OOP). The layers are defined in the `init` function and the forward pass is defined in the `forward` function, which is invoked automatically when the class is called. To create an instance of this class, the input and output dimensions are required but also the dimensions of the hidden layers, in the form of a list. For example, `hidden_dim_array = [6, 4, 2]` will mean the model has 3 hidden layers of 6, 4 and 2 neurons. Using `super(FeedforwardNeuralNetModel, self).__init__`, these functions are possible as the class `nn.Module` from torch is inherited.
 
-N.B. `nn.Linear` takes a input shape and output shape and produces a weight and bias term for the specified shape.
+To avoid exploding or vanishing gradients, it is important to initialise the weights, with a general rule-of-thumb being that the weights should be close to zero, but not zero. As the hidden layers have the non-linear activation function ReLU, Kaiming (or He) initialisation will be used, with a uniform distribution. The biases will all be initialised with 1.
+
+```py
+for layer in self.layers:
+  if isinstance(layer, nn.Linear):
+      nn.init.kaiming_uniform_(layer.weight, mode='fan_in', nonlinearity='relu')
+      nn.init.constant_(layer.bias, 1)
+```
+
+> Initialising the weights and biases of the model.
 
 ### Instantiating the model
 
-The input and output dimensions are determined by the number of features to targets, which in this case are 11 and 1 respectively. Determining the dimension of the hidden layer requires a little more thought. Too few hidden neurons and there is insufficient model capacity to predict competently. However a bigger model does not necessarily always equate to a better model. A bigger model will require more training samples to learn and converge to a good model (also called the curse of dimensionality), hence the optimal number will depend on the problem. There are many genereal 'rule-of thumb' methods such as:
+The input and output dimensions are determined by the number of features to targets, which in this case are 11 and 1 respectively. Determining the dimension of the hidden layer requires a little more thought. Too few hidden neurons and there is insufficient model capacity to predict competently. However a bigger model does not necessarily always equate to a better model. A bigger model will require more training samples to learn and converge to a good model (also called the curse of dimensionality), hence the optimal number will depend on the problem. There are many genereal rule-of-thumb methods such as:
 - The number of hidden neurons should be between the size of the input layer and the size of the output layer.
 - The number of hidden neurons should be 2/3 the size of the input layer, plus the size of the output layer.
 - The number of hidden neurons should be less than twice the size of the input layer.
@@ -229,13 +238,13 @@ The function `generate_nn_config()` creates a range of different configurations 
 For this problem, the best hyperparameters are:
 - Optimiser: SGD
 - Learning rate: 1e-5
-- Hidden layer configuration: [6, 2]
+- Hidden layer configuration: [4, 2]
 
 This model has the metrics:
-- Test set RMSE: 99.824
-- Test set R2 score: 0.37159
-- Training time: 10.491 seconds
-- Inference latency: 0.00010145 seconds
+- Test set RMSE: 98.000
+- Test set R2 score: 0.39435
+- Training time: 49.920 seconds
+- Inference latency: 0.00014894 seconds
 
 <p align='center'>
   <img src='README-images/nn-regression-train-test-rmse.png' width='500'>
@@ -243,3 +252,11 @@ This model has the metrics:
 </p>
 
 > The test and train set's RMSE and R2 score for the best performing model.
+
+As there is not much difference between the two sets' RMSE, it would seem that this model is a good fit.
+
+<p align='center'>
+  <img src='README-images/tensorboard.png' width='500'>
+</p>
+
+> Plotting the training RMSE using Tensorboard.

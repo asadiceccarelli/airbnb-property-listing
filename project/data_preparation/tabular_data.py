@@ -102,5 +102,5 @@ def load_airbnb(df, labels):
 
 
 if __name__ == '__main__':
-    airbnb_data = pd.read_csv('dataframes/cleaned_dataset.csv')
-    create_numerical_dataset(airbnb_data).to_csv('dataframes/numerical_data.csv')
+    airbnb_data = pd.read_csv('project/data/structured/cleaned_dataset.csv')
+    create_numerical_dataset(airbnb_data).to_csv('project/data/structured/numerical_data.csv')
